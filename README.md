@@ -19,3 +19,15 @@ The **App Nerds Web Application Generator**, or *anwag*, is a tool to generate a
 go get -u github.com/app-nerds/anwag
 ```
 
+## Usage
+
+To use **anwag** simply run the following in your terminal.
+
+```bash
+anwag
+```
+
+You will receive a series of prompts. Answer the questions. Once complete you should see a screen like the one below.
+
+![ANWAG Screenshot](anwag-screenshot.png)
+
