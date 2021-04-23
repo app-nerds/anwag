@@ -1,0 +1,38 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"strings"
+
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
+)
+
+func NewConfig(serverVersion string) *viper.Viper {
+	result := viper.New()
+	result.Set("server.version", serverVersion)
+
+	result.SetDefault("server.host", "localhost:8080")
+	result.BindEnv("server.host", fmt.Sprintf("%s_SERVER_HOST", ENV_PREFIX))
+	flag.String("server.host", "localhost:8080", "Host and port to bind this server to")
+
+	result.SetDefault("server.loglevel", "debug")
+	result.BindEnv("server.loglevel", fmt.Sprintf("%s_SERVER_LOGLEVEL", ENV_PREFIX))
+	flag.String("server.loglevel", "debug", "Minimum level to write log entries for")
+
+	result.SetDefault("server.cert", "")
+	result.BindEnv("server.cert", fmt.Sprintf("%s_SERVER_CERT", ENV_PREFIX))
+	flag.String("server.cert", "", "SSL certificate file name (minus extension)")
+
+	result.SetDefault("database.url", fmt.Sprintf("postgres://%s:%s@%s/%s", DEFAULT_DB_USER, DEFAULT_DB_PASSWORD, DEFAULT_DB_HOST, strings.ToLower(APP_NAME)))
+	result.BindEnv("database.url", fmt.Sprintf("%s_DATABASE_URL", ENV_PREFIX))
+	flag.String("database.url", fmt.Sprintf("postgres://%s:%s@%s/%s", DEFAULT_DB_USER, DEFAULT_DB_PASSWORD, DEFAULT_DB_HOST, strings.ToLower(APP_NAME)), "URL for connecting to a database")
+
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	pflag.Parse()
+	result.BindPFlags(pflag.CommandLine)
+
+	return result
+}
+

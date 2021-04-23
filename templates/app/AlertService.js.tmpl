@@ -1,0 +1,57 @@
+/*
+ * Copyright © {{.Year}}. {{.CompanyName}} All Rights Reserved
+ */
+
+export class AlertService {
+	constructor($toast) {
+		this.$toast = $toast;
+	}
+
+	// areYouSure(message, onOK) {
+	// 	let dialog = ejs.popups.DialogUtility.confirm({
+	// 		title: "Confirm",
+	// 		content: message,
+	// 		okButton: {
+	// 			text: "Yes", click: () => {
+	// 				onOK();
+	// 				dialog.close();
+	// 			},
+	// 		},
+	// 		cancelButton: { text: "Cancel" },
+	// 		showCloseIcon: true,
+	// 		closeOnEscape: true,
+	// 	});
+	// }
+
+	error(message) {
+		this.$toast.error(this.getMessage(message));
+	}
+
+	getMessage(message) {
+		if (message.message) {
+			return message.message;
+		}
+
+		if (message.bodyText) {
+			return message.bodyText;
+		}
+
+		return message;
+	}
+
+	info(message) {
+		this.$toast.info(this.getMessage(message));
+	}
+
+	success(message) {
+		this.$toast.success(this.getMessage(message));
+	}
+}
+
+/*
+ * This method installs the AlertService.
+ */
+export function AlertServiceInstaller(Vue) {
+	Vue.prototype.alertService = new AlertService(Vue.toasted);
+}
+

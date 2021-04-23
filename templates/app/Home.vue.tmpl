@@ -1,0 +1,74 @@
+<template>
+	<div>
+		<logo></logo>
+
+		<div class="row mt-4 justify-content-center">
+			<div class="col-6">
+				<h1>Welcome!</h1>
+
+				<p>
+					Welcome to the Vue Starter Kit! This is a template for building
+					web-based applications in Go (1.16), the best language around,
+					and VueJS 2, the best JavaScript library around!
+				</p>
+
+				<p>
+					This starter kit makes use of the following tech. Not every
+					project needs everything here, so customize it to your needs!
+				</p>
+				<ul>
+					<li>Go 1.16 for building your API</li>
+					<li>
+						VueJS 2.6.11 for building reactive Javascript applications
+					</li>
+					<li>Bootstrap 4.5.2 for a great CSS foundation</li>
+					<li>FontAwesome 5.14.0. The best font library around</li>
+					<li>moment.js for date handling</li>
+					<li>
+						vue-loading-overlay to provide a spinner library. Already
+						wired up for HTTP requests!
+					</li>
+					<li>vue-resource 1.5.1 for easy HTTP AJAX stuff</li>
+					<li>vue-router 3.2.0 for Single Page Application routing</li>
+					<li>vue-session for persisting data to local storage</li>
+					<li>vuex 3.4.0 for state management</li>
+				</ul>
+			</div>
+		</div>
+
+		<div class="row mt-4 justify-content-center">
+			<div class="col-2">
+				<p>
+					Server version: <strong>{{ `{{ version }}` }}</strong>
+				</p>
+			</div>
+		</div>
+	</div>
+</template>
+
+<script>
+/*
+ * Copyright © {{.Year}}. {{.CompanyName}} All Rights Reserved
+ */
+
+import Logo from "../modules/ui/components/Logo.vue";
+
+export default {
+	name: "Home",
+
+	components: {
+		Logo,
+	},
+
+	data() {
+		return {
+			version: "",
+		};
+	},
+
+	async created() {
+		this.version = await this.versionService.getVersion();
+	},
+};
+</script>
+

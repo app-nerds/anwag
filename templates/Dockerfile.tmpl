@@ -1,0 +1,26 @@
+FROM golang:1.16 as builder
+
+ARG GITHUB_TOKEN
+
+WORKDIR /build
+COPY . .
+
+RUN git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
+
+RUN curl -sL https://deb.nodesource.com/setup_15.x | bash && \
+	apt-get update && \
+	apt-get upgrade -y && \
+	apt-get install -y nodejs && \
+	npm install -g @vue/cli && \
+	go get -u github.com/swaggo/swag/cmd/swag && \
+	make build-linux
+
+RUN git config --global --unset url."https://${GITHUB_TOKEN}@github.com/".insteadOf
+
+FROM alpine:latest
+
+# Change to directory for building
+WORKDIR /app
+COPY --from=builder /build/{{.AppName}} .
+
+ENTRYPOINT ["./{{.AppName}}"]

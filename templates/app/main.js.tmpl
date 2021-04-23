@@ -1,0 +1,38 @@
+/*
+ * Copyright © {{.Year}}. {{.CompanyName}} All Rights Reserved
+ */
+
+import Vue from "vue";
+import App from "./App.vue";
+import router from "./router";
+import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
+import Loading from "vue-loading-overlay";
+import VueSession from "vue-session";
+import Toasted from "vue-toasted";
+import VueResource from "vue-resource";
+import { BootstrapVue, IconsPlugin } from "bootstrap-vue";
+
+import { InstallHttpInterceptors } from "./HttpInterceptors";
+import { AlertServiceInstaller } from "./modules/ui/services/AlertService";
+import { VersionServiceInstaller } from "./modules/version/services/VersionService";
+
+Vue.config.productionTip = false;
+
+Vue.use(BootstrapVue);
+Vue.use(IconsPlugin);
+Vue.component("font-awesome-icon", FontAwesomeIcon);
+Vue.use(Loading);
+Vue.use(VueSession);
+Vue.use(Toasted);
+Vue.use(VueResource);
+
+Vue.use(AlertServiceInstaller);
+Vue.use(VersionServiceInstaller);
+
+InstallHttpInterceptors(Vue);
+
+new Vue({
+	router,
+	render: h => h(App),
+}).$mount("#app");
+

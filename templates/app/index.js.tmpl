@@ -1,0 +1,58 @@
+/*
+ * Copyright © {{.Year}}. {{.CompanyName}} All Rights Reserved
+ */
+
+import Vue from "vue";
+import VueRouter from "vue-router";
+import Home from "../views/Home.vue";
+
+Vue.use(VueRouter);
+
+const routes = [
+	{
+		path: "/",
+		name: "home",
+		component: Home,
+		meta: {
+			title: "Home",
+			requiresAuth: false,
+		},
+	},
+	{
+		path: "/page-two",
+		name: "pagetwo",
+		component: () =>
+			import(/* webpackChunkName: "pagetwo" */ "../views/PageTwo.vue"),
+		meta: {
+			title: "Page Two",
+			requiresAuth: false,
+		},
+	},
+];
+
+let router = new VueRouter({
+	base: process.env.BASE_URL,
+	routes,
+	scrollBehavior: () => {
+		return {
+			x: 0,
+			y: 0,
+		};
+	},
+});
+
+router.beforeEach(async (to, from, next) => {
+	// if (to.matched.some(record => record.meta.requiresAuth)) {
+	// 	if (!Vue.prototype.sessionService.isLoggedIn()) {
+	// 		return next({
+	// 			name: "login",
+	// 		});
+	// 	}
+	// }
+
+	document.title = `${to.meta.title} | {{.Title}}`;
+	return next();
+});
+
+export default router;
+

@@ -1,0 +1,106 @@
+.DEFAULT_GOAL := help
+.PHONY: help
+
+help:
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
+
+SWAG := $(shell command -v swag 2> /dev/null)
+
+VERSION=1.0.0
+BUILDFLAGS=-s -w -X 'main.Version=${VERSION}'
+PROJECTNAME={{.AppName}}
+GOENV=CGO_ENABLED=0 GOPRIVATE="github.com/app-nerds/*" GONOPROXY="github.com/app-nerds/*"
+GC=${GOENV} go build -ldflags="${BUILDFLAGS}" -o ${PROJECTNAME}
+
+verifydeps:
+ifndef SWAG
+	$(error "Swag is not installed on this system. https://github.com/swaggo/swag")
+endif
+
+ifeq ($(OS),Windows_NT)
+	GOOS=windows
+	ifeq ($(PROCESSOR_ARCHITEW6432),AMD64)
+		GOARCH=amd64
+	else
+		ifeq ($(PROCESSOR_ARCHITECTURE),AMD64)
+			GOARCH=amd64
+		endif
+		ifeq ($(PROCESSOR_ARCHITECTURE),x86)
+			GOARCH=x86
+		endif
+	endif
+else
+	UNAME_S := $(shell uname -s)
+	ifeq ($(UNAME_S),Linux)
+		GOOS=linux
+	endif
+	ifeq ($(UNAME_S),Darwin)
+		GOOS=darwin
+	endif
+	UNAME_P := $(shell uname -p)
+	ifeq ($(UNAME_P),x86_64)
+		GOARCH=amd64
+	endif
+	ifneq ($(filter %86,$(UNAME_P)),)
+		GOARCH=x86        
+   endif
+   ifneq ($(filter arm%,$(UNAME_P)),)
+      GOARCH=arm64
+   endif	
+endif
+
+#
+# Local dev tasks
+#
+
+bench: ## Run all benchmark tests
+	go test ./... -bench=.
+
+coverage: ## Run all unit tests and display a coverage report
+	go test ./... -coverageprofile=coverageprofile.out
+
+test: ## Run all unit tests
+	go test ./...
+
+run: generate-swagger-docs ## Run the application for local development
+	go run .
+
+#
+# Build tasks
+#
+
+build: build-client-appp ## Automatically determine OS and Architecture, and build an executable
+	GOOS=${GOOS} GOARCH=${GOARCH} ${GC}
+
+build-windows: build-client-app ## Create a compiled Windows binary
+	GOOS=windows GOARCH=amd64 ${GC}.exe
+
+build-mac: build-client-app ## Create a compiled MacOS binary (arm64)
+	GOOS=darwin GOARCH=arm64 ${GC}
+
+build-mac-amd: build-client-app ## Create a compiled MacOS binary (amd64)
+	GOOS=darwin GOARCH=amd64 ${GC}
+
+build-linux: build-client-app ## Create a compiled Linux binary (amd64)
+	GOOS=linux GOARCH=amd64 ${GC}
+
+build-client-app: generate-swagger-docs
+	cd app && npm run build
+
+generate-swagger-docs: verifydeps
+	swag init --parseDependency
+
+#
+# Docker tasks
+#
+
+{{if .WantDatabase}}start-postgres: ## Starts a Postgres server in Docker
+	docker-compose -f docker-compose.yml up postgres{{end}}
+
+run-docker: ## Starts all containers in Docker
+	docker-compose -f docker-compose.yml up
+
+build-docker: ## Builds the application into a docker image
+	docker-compose build
+
+

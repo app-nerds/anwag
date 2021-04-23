@@ -1,0 +1,60 @@
+/*
+ * Copyright © {{.Year}}. {{.CompanyName}} All Rights Reserved
+ */
+
+package main_test
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"{{.GithubPath}}"
+	"github.com/labstack/echo/v4"
+	"github.com/spf13/viper"
+)
+
+func TestVersionController_GetVersion(t *testing.T) {
+	config := viper.New()
+	config.Set("server.version", "My Version!!")
+
+	tests := []struct {
+		name           string
+		expectedStatus int
+		expectedBody   string
+	}{
+		{
+			name:           "Returns the server veresion",
+			expectedStatus: http.StatusOK,
+			expectedBody:   "My Version!!",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := echo.New()
+
+			request := httptest.NewRequest("GET", "/version", nil)
+			request.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+
+			recorder := httptest.NewRecorder()
+			ctx := e.NewContext(request, recorder)
+
+			c := main.VersionController{
+				Config: config,
+			}
+
+			c.GetVersion(ctx)
+
+			if recorder.Code != tt.expectedStatus {
+				t.Errorf("GetVersion() want %d, got %d", tt.expectedStatus, recorder.Code)
+			}
+
+			if !strings.EqualFold(strings.TrimSpace(recorder.Body.String()), tt.expectedBody) {
+				t.Errorf("GetVersion()\nwant %s\ngot%s", tt.expectedBody, recorder.Body.String())
+			}
+		})
+	}
+}
+

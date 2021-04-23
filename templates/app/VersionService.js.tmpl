@@ -1,0 +1,20 @@
+/*
+ * Copyright © {{.Year}}. {{.CompanyName}} All Rights Reserved
+ */
+
+export class VersionService {
+	constructor($http) {
+		this.$http = $http;
+		this.baseURL = `/api/v1/version`;
+	}
+
+	async getVersion() {
+		let response = await this.$http.get(this.baseURL);
+		return response.body;
+	}
+}
+
+export function VersionServiceInstaller(Vue) {
+	Vue.prototype.versionService = new VersionService(Vue.http);
+}
+
