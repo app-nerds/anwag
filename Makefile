@@ -46,6 +46,9 @@ endif
 # Build tasks
 #
 
+run: ## Run the app
+	go run .
+
 build-windows: ## Create a compiled Windows binary
 	GOOS=windows GOARCH=amd64 ${GC}.exe
 

@@ -8,11 +8,13 @@ import (
 	"io"
 	"io/fs"
 	"os"
+	"os/exec"
 	"strings"
 	"text/template"
 	"time"
 
 	"github.com/AlecAivazis/survey/v2"
+	"github.com/AlecAivazis/survey/v2/terminal"
 	"github.com/app-nerds/postgresr"
 	"github.com/iancoleman/strcase"
 	"github.com/jackc/pgx/v4"
@@ -50,14 +52,6 @@ type appValues struct {
 	WantModel    bool
 
 	GithubToken string
-}
-
-type dbValues struct {
-	DbHost     string
-	DbUser     string
-	DbPassword string
-	DbName     string
-	WantModel  bool
 }
 
 type tableStruct struct {
@@ -100,48 +94,61 @@ func main() {
 		WantDatabase: false,
 	}
 
-	fmt.Printf("Welcome to App Nerds Web Application Generator (%s)\n\n", Version)
+	fmt.Printf("\n🙏 Welcome to App Nerds Web Application Generator (%s)\n\n", Version)
+	fmt.Printf("Please note that you'll need the following tools to develop in this application:\n")
+	fmt.Printf("   Go - https://golang.org\n")
+	fmt.Printf("   Swag - https://github.com/swaggo/swag\n")
+	fmt.Printf("   NodeJS - https://nodejs.org\n")
+	fmt.Printf("   Vue CLI - https://cli.vuejs.org\n")
+	fmt.Printf("\n")
 
 	firstQuestions := []*survey.Question{
 		{
-			Name:     "GithubPath",
-			Prompt:   &survey.Input{Message: "Enter the Github path for this application's home repo"},
+			Name: "GithubPath",
+			Prompt: &survey.Input{
+				Message: "Enter the Github path for this application's home repo",
+				Help:    "This should be the path to a Github repository. eg. github.com/app-nerds/my-new-app",
+			},
 			Validate: survey.Required,
 		},
 		{
 			Name:   "CompanyName",
-			Prompt: &survey.Input{Message: "Company name"},
+			Prompt: &survey.Input{Message: "Company name", Default: "App Nerds"},
 		},
 		{
-			Name:   "Title",
-			Prompt: &survey.Input{Message: "Title", Help: "Used in browser and README"},
-		},
-		{
-			Name:   "AppName",
-			Prompt: &survey.Input{Message: "Application name", Help: "No spaces"},
-			Validate: func(val interface{}) error {
-				value := val.(string)
-
-				if hasSpace(value) {
-					return errors.New("Application name cannot contain spaces!")
-				}
-
-				return nil
+			Name: "Title",
+			Prompt: &survey.Input{
+				Message: "Title",
+				Help:    "This value is used in the browser title and README",
 			},
 		},
 		{
-			Name:      "EnvPrefix",
-			Prompt:    &survey.Input{Message: "Environment variable prefix", Help: "No spaces"},
-			Transform: survey.TransformString(strings.ToUpper),
-			Validate: func(val interface{}) error {
-				value := val.(string)
-
-				if hasSpace(value) {
-					return errors.New("Environment prefix cannot have spaces!")
-				}
-
-				return nil
+			Name: "AppName",
+			Prompt: &survey.Input{
+				Message: "Application name",
+				Help:    "This is used primary as the final executable name. There should be no spaces in this name. Spaces will be replaced with hyphens",
 			},
+			Transform: survey.TransformString(func(s string) string {
+				lower := strings.ToLower(s)
+				nospaces := strings.ReplaceAll(lower, " ", "-")
+				notabs := strings.ReplaceAll(nospaces, "\t", "-")
+
+				return notabs
+			}),
+		},
+		{
+			Name: "EnvPrefix",
+			Prompt: &survey.Input{
+				Message: "Environment variable prefix",
+				Help:    "This prefix will be applied to configuration values pulled from the environment. eg. PREFIX_SERVER_HOST. No spaces allowed.",
+			},
+			Transform: survey.TransformString(func(s string) string {
+				upper := strings.ToUpper(s)
+				nospaces := strings.ReplaceAll(upper, " ", "")
+				notabs := strings.ReplaceAll(nospaces, "\t", "")
+
+				return notabs
+			}),
 		},
 		{
 			Name:   "Description",
@@ -152,16 +159,24 @@ func main() {
 			Prompt: &survey.Input{Message: "Enter your email address"},
 		},
 		{
-			Name:   "GithubToken",
-			Prompt: &survey.Input{Message: "Enter your Github Personal Access Token", Help: "This is used for accessing private repos in Docker builds"},
+			Name: "GithubToken",
+			Prompt: &survey.Input{
+				Message: "Enter your Github Personal Access Token",
+				Help:    "This is used for accessing private repos in Docker builds. See https://docs.github.com/en/github/authenticating-to-github/keeping-your-account-and-data-secure/creating-a-personal-access-token",
+			},
 		},
 		{
 			Name:   "WantDatabase",
-			Prompt: &survey.Confirm{Message: "Would you like to use a database?"},
+			Prompt: &survey.Confirm{Message: "Would you like to use a database?", Default: false},
 		},
 	}
 
 	if err = survey.Ask(firstQuestions, &values); err != nil {
+		if err == terminal.InterruptErr {
+			fmt.Printf("\nCancelling.\n")
+			os.Exit(-1)
+		}
+
 		logrus.WithError(err).Fatalf("There was an error!")
 	}
 
@@ -194,6 +209,11 @@ func main() {
 		}
 
 		if err = survey.Ask(dbQuestions, &values); err != nil {
+			if err == terminal.InterruptErr {
+				fmt.Printf("\nCancelling.\n")
+				os.Exit(-1)
+			}
+
 			logrus.WithError(err).Fatalf("There was an error!")
 		}
 
@@ -208,7 +228,14 @@ func main() {
 				Options: tableNames,
 			}
 
-			survey.AskOne(whichTablesPrompt, &selectedTables)
+			if err = survey.AskOne(whichTablesPrompt, &selectedTables); err != nil {
+				if err == terminal.InterruptErr {
+					fmt.Printf("\nCancelling.\n")
+					os.Exit(-1)
+				}
+
+				logrus.WithError(err).Fatalf("There was an error!")
+			}
 
 			if tables, err = getColumnsForTables(values, selectedTables); err != nil {
 				logrus.WithError(err).Fatalf("Error getting column information!")
@@ -268,6 +295,10 @@ func main() {
 		"templates/app/favicon.ico":        "app/public/favicon.ico",
 		"templates/app/app-nerds-logo.jpg": "app/src/assets/images/app-nerds-logo.jpg",
 	}
+
+	fmt.Printf("\nCreating your new application!\n")
+	fmt.Printf("   This might take a couple of minutes... ☕️\n")
+	fmt.Printf("\n")
 
 	/*
 	 * Create directories
@@ -390,17 +421,22 @@ func main() {
 		}
 	}
 
+	/*
+	 * Do the steps the initialze the new app
+	 */
+	if err = modDownload(); err != nil {
+		logrus.WithError(err).Fatalf("Error downloading Go modules")
+	}
+
+	if err = npmInstall(); err != nil {
+		logrus.WithError(err).Fatalf("Error installing Node modules")
+	}
+
+	if err = buildNode(); err != nil {
+		logrus.WithError(err).Fatalf("Error building NodeJS app")
+	}
+
 	fmt.Printf("\n🎉 Congratulations! Your new application is ready.\n")
-	fmt.Printf("Please note that you'll need the following tools to develop in this application:\n")
-	fmt.Printf("   Go - https://golang.org\n")
-	fmt.Printf("   Swag - https://github.com/swaggo/swag\n")
-	fmt.Printf("   NodeJS - https://nodejs.org\n")
-	fmt.Printf("   Vue CLI - https://cli.vuejs.org\n")
-	fmt.Printf("\nTo begin execute the following:\n\n")
-	fmt.Printf("   cd %s/app\n", values.AppName)
-	fmt.Printf("   npm install && npm run build\n")
-	fmt.Printf("   cd ..\n")
-	fmt.Printf("   go get\n")
 
 	if values.WantDatabase {
 		fmt.Printf("\n👩‍💻 Since you opted to have a database setup, in a new terminal window run: \n")
@@ -607,4 +643,58 @@ type {{.Name}} struct {
 
 func hasSpace(value string) bool {
 	return strings.ContainsAny(value, "  \t")
+}
+
+func modDownload() error {
+	cmd := exec.Command("go", "mod", "download")
+	fmt.Printf("Downloading Go modules...\n")
+
+	err := cmd.Run()
+	return err
+}
+
+func npmInstall() error {
+	var (
+		err error
+	)
+
+	if err = os.Chdir("app"); err != nil {
+		return errors.New("error changing to app directory in npmInstall()")
+	}
+
+	cmd := exec.Command("npm", "install")
+	fmt.Printf("Installing NodeJS modules...\n")
+
+	if err = cmd.Run(); err != nil {
+		return err
+	}
+
+	if err = os.Chdir(".."); err != nil {
+		return errors.New("error changing back to project root directory in npmInstall()")
+	}
+
+	return nil
+}
+
+func buildNode() error {
+	var (
+		err error
+	)
+
+	if err = os.Chdir("app"); err != nil {
+		return errors.New("error changing to app directory in buildNode()")
+	}
+
+	cmd := exec.Command("npm", "run", "build")
+	fmt.Printf("Building NodeJS app...\n")
+
+	if err = cmd.Run(); err != nil {
+		return err
+	}
+
+	if err = os.Chdir(".."); err != nil {
+		return errors.New("error changing back to project root directory in buildNode()")
+	}
+
+	return nil
 }

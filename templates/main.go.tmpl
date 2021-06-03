@@ -30,10 +30,11 @@ import (
 const (
 	APP_NAME   string = "{{.AppName}}"
 	ENV_PREFIX string = "{{.EnvPrefix}}"{{if .WantDatabase}}
-
+	
 	DEFAULT_DB_HOST            string = "{{.DbHost}}"
 	DEFAULT_DB_USER            string = "{{.DbUser}}"
 	DEFAULT_DB_PASSWORD        string = "{{.DbPassword}}"
+	DEFAULT_DB_NAME            string = "{{.DbName}}"
 	MAX_DB_CONNECTION_ATTEMPTS int    = 5{{end}}
 )
 
