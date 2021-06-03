@@ -1,0 +1,36 @@
+name: ANWAG
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Set up Go
+      uses: actions/setup-go@v2
+      with:
+        go-version: 1.16
+
+    - name: Build 
+      env:
+        ACTIONS_TOKEN: ${{ secrets.ACTIONS_TOKEN }}
+      run: |
+        git config --global url."https://${ACTIONS_TOKEN}@github.com/".insteadOf "https://github.com/"
+        make build-all
+
+    - name: Package
+      run: make package
+
+    - name: Release
+      uses: softprops/action-gh-release@v1
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      with:
+        body_path: ./CHANGELOG.md
+        files: "*.zip"
+

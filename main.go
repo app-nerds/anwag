@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"embed"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -10,7 +12,10 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/manifoldco/promptui"
+	"github.com/AlecAivazis/survey/v2"
+	"github.com/app-nerds/postgresr"
+	"github.com/iancoleman/strcase"
+	"github.com/jackc/pgx/v4"
 	"github.com/sirupsen/logrus"
 )
 
@@ -41,17 +46,53 @@ type appValues struct {
 	DbHost       string
 	DbUser       string
 	DbPassword   string
+	DbName       string
+	WantModel    bool
 
 	GithubToken string
 }
 
+type dbValues struct {
+	DbHost     string
+	DbUser     string
+	DbPassword string
+	DbName     string
+	WantModel  bool
+}
+
+type tableStruct struct {
+	Name    string
+	Columns []tableColumn
+}
+
+type tableColumn struct {
+	Name     string
+	DataType string
+}
+
+var postgresDatatypes = map[string]string{
+	"bigint":                      "int",
+	"bit":                         "bool",
+	"character varying":           "string",
+	"integer":                     "int",
+	"numeric":                     "float64",
+	"smallint":                    "int",
+	"text":                        "string",
+	"time without time zone":      "time.Time",
+	"timestamp without time zone": "time.Time",
+	"uuid":                        "string",
+}
+
 func main() {
 	var (
-		err       error
-		fp        *os.File
-		sourceFp  fs.File
-		templates *template.Template
-		subdirs   []string
+		err            error
+		fp             *os.File
+		sourceFp       fs.File
+		templates      *template.Template
+		subdirs        []string
+		tableNames     []string
+		selectedTables []string
+		tables         []tableStruct
 	)
 
 	values := appValues{
@@ -59,28 +100,120 @@ func main() {
 		WantDatabase: false,
 	}
 
-	charsReplacer := strings.NewReplacer("-", "", "_", "", " ", "")
-
 	fmt.Printf("Welcome to App Nerds Web Application Generator (%s)\n\n", Version)
 
-	values.GithubPath = stringPrompt("Enter the Github path for this application's home repo", "")
-	lastPartOfRepo := values.GithubPath[strings.LastIndex(values.GithubPath, "/")+1:]
-	strippedLastPartOfRepo := charsReplacer.Replace(lastPartOfRepo)
-	capsLastPartOfRepo := strings.ToUpper(strippedLastPartOfRepo)
+	firstQuestions := []*survey.Question{
+		{
+			Name:     "GithubPath",
+			Prompt:   &survey.Input{Message: "Enter the Github path for this application's home repo"},
+			Validate: survey.Required,
+		},
+		{
+			Name:   "CompanyName",
+			Prompt: &survey.Input{Message: "Company name"},
+		},
+		{
+			Name:   "Title",
+			Prompt: &survey.Input{Message: "Title", Help: "Used in browser and README"},
+		},
+		{
+			Name:   "AppName",
+			Prompt: &survey.Input{Message: "Application name", Help: "No spaces"},
+			Validate: func(val interface{}) error {
+				value := val.(string)
 
-	values.CompanyName = stringPrompt("Company name", "")
-	values.Title = stringPrompt("Title (used in browser title and header)", "")
-	values.AppName = stringPrompt("Application name (no spaces)", strippedLastPartOfRepo)
-	values.EnvPrefix = stringPrompt("Environment variable prefix (no spaces, all caps)", capsLastPartOfRepo)
-	values.Description = stringPrompt("Describe this application in a single sentance", "")
-	values.Email = stringPrompt("Enter your email address", "")
-	values.GithubToken = stringPrompt("Enter your Github Personal Access Token", "")
-	values.WantDatabase = yesNoPrompt("Would you like to use a database?")
+				if hasSpace(value) {
+					return errors.New("Application name cannot contain spaces!")
+				}
+
+				return nil
+			},
+		},
+		{
+			Name:      "EnvPrefix",
+			Prompt:    &survey.Input{Message: "Environment variable prefix", Help: "No spaces"},
+			Transform: survey.TransformString(strings.ToUpper),
+			Validate: func(val interface{}) error {
+				value := val.(string)
+
+				if hasSpace(value) {
+					return errors.New("Environment prefix cannot have spaces!")
+				}
+
+				return nil
+			},
+		},
+		{
+			Name:   "Description",
+			Prompt: &survey.Input{Message: "Describe this application in a single sentence"},
+		},
+		{
+			Name:   "Email",
+			Prompt: &survey.Input{Message: "Enter your email address"},
+		},
+		{
+			Name:   "GithubToken",
+			Prompt: &survey.Input{Message: "Enter your Github Personal Access Token", Help: "This is used for accessing private repos in Docker builds"},
+		},
+		{
+			Name:   "WantDatabase",
+			Prompt: &survey.Confirm{Message: "Would you like to use a database?"},
+		},
+	}
+
+	if err = survey.Ask(firstQuestions, &values); err != nil {
+		logrus.WithError(err).Fatalf("There was an error!")
+	}
 
 	if values.WantDatabase {
-		values.DbHost = stringPrompt("Database host address", "localhost")
-		values.DbUser = stringPrompt("User name", strippedLastPartOfRepo)
-		values.DbPassword = stringPrompt("Password", "password")
+		dbQuestions := []*survey.Question{
+			{
+				Name:     "DbHost",
+				Prompt:   &survey.Input{Message: "Database host address", Default: "localhost"},
+				Validate: survey.Required,
+			},
+			{
+				Name:     "DbUser",
+				Prompt:   &survey.Input{Message: "User name"},
+				Validate: survey.Required,
+			},
+			{
+				Name:     "DbPassword",
+				Prompt:   &survey.Password{Message: "Password"},
+				Validate: survey.Required,
+			},
+			{
+				Name:     "DbName",
+				Prompt:   &survey.Input{Message: "Database name"},
+				Validate: survey.Required,
+			},
+			{
+				Name:   "WantModel",
+				Prompt: &survey.Confirm{Message: "Would you like to generate Go models?"},
+			},
+		}
+
+		if err = survey.Ask(dbQuestions, &values); err != nil {
+			logrus.WithError(err).Fatalf("There was an error!")
+		}
+
+		if values.WantModel {
+			if tableNames, err = getListOfTables(values); err != nil {
+				fmt.Printf("Uh oh! There was an error getting a list of tables!\n\n%s\n\nClosing.\n", err.Error())
+				os.Exit(-1)
+			}
+
+			whichTablesPrompt := &survey.MultiSelect{
+				Message: "Which tables should I generate modesl from?",
+				Options: tableNames,
+			}
+
+			survey.AskOne(whichTablesPrompt, &selectedTables)
+
+			if tables, err = getColumnsForTables(values, selectedTables); err != nil {
+				logrus.WithError(err).Fatalf("Error getting column information!")
+			}
+		}
 	}
 
 	rootFsMapping := map[string]string{
@@ -235,6 +368,28 @@ func main() {
 		}
 	}
 
+	/*
+	 * Generate models
+	 */
+	if values.WantDatabase && values.WantModel {
+		for _, t := range tables {
+			var modelTemplate string
+			modelFileName := fmt.Sprintf("%s.go", strcase.ToCamel(t.Name))
+
+			if modelTemplate, err = generateModelFromTable(t); err != nil {
+				logrus.WithError(err).Fatalf("error generating table model for %s", t.Name)
+			}
+
+			if fp, err = os.Create(modelFileName); err != nil {
+				logrus.WithError(err).Fatalf("unable to create model file %s", modelFileName)
+			}
+
+			defer fp.Close()
+
+			_, _ = fp.WriteString(modelTemplate)
+		}
+	}
+
 	fmt.Printf("\n🎉 Congratulations! Your new application is ready.\n")
 	fmt.Printf("Please note that you'll need the following tools to develop in this application:\n")
 	fmt.Printf("   Go - https://golang.org\n")
@@ -268,42 +423,188 @@ func main() {
 	fmt.Printf("Access Token that has access to private repositories.\n")
 }
 
-func stringPrompt(label, defaultValue string) string {
-	var (
-		err    error
-		result string
-	)
-
-	prompt := promptui.Prompt{
-		Label:   label,
-		Default: defaultValue,
-	}
-
-	if result, err = prompt.Run(); err != nil {
-		logrus.WithError(err).Fatalf("error asking for '%s'", label)
-	}
-
-	return result
+func getListOfTables(values appValues) ([]string, error) {
+	// For future, if I support more DBs, we'll switch here
+	return getListOfTablesPostgres(values)
 }
 
-func yesNoPrompt(label string) bool {
+func getColumnsForTables(values appValues, tableNames []string) ([]tableStruct, error) {
+	// For future, if I support more DBs, we'll switch here
+	return getColumnsForTablesPostgres(values, tableNames)
+}
+
+func getListOfTablesPostgres(values appValues) ([]string, error) {
 	var (
-		err       error
-		selection string
+		err  error
+		db   postgresr.Conn
+		rows pgx.Rows
+
+		tablename string
 	)
 
-	prompt := promptui.Select{
-		Label: label,
-		Items: []string{"No", "Yes"},
+	result := make([]string, 0, 15)
+
+	db, err = postgresr.Connect(context.Background(),
+		fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
+			values.DbHost, values.DbUser, values.DbPassword,
+			values.DbName,
+		),
+	)
+
+	if err != nil {
+		return result, err
 	}
 
-	if _, selection, err = prompt.Run(); err != nil {
-		logrus.WithError(err).Fatalf("error asking for '%s'", label)
+	defer db.Close(context.Background())
+
+	sql := `
+		SELECT tablename FROM pg_catalog.pg_tables
+		WHERE schemaname != 'pg_catalog'
+		AND schemaname != 'information_schema'
+	`
+
+	if rows, err = db.Query(context.Background(), sql); err != nil {
+		return result, err
 	}
 
-	if selection == "Yes" {
-		return true
+	for rows.Next() {
+		if err = rows.Scan(&tablename); err != nil {
+			return result, err
+		}
+
+		result = append(result, tablename)
 	}
 
-	return false
+	return result, err
+}
+
+func getColumnsForTablesPostgres(values appValues, tableNames []string) ([]tableStruct, error) {
+	var (
+		err  error
+		db   postgresr.Conn
+		rows pgx.Rows
+	)
+
+	result := make([]tableStruct, 0, 15)
+
+	db, err = postgresr.Connect(context.Background(),
+		fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
+			values.DbHost, values.DbUser, values.DbPassword,
+			values.DbName,
+		),
+	)
+
+	if err != nil {
+		return result, err
+	}
+
+	defer db.Close(context.Background())
+
+	for _, tableName := range tableNames {
+		t := tableStruct{
+			Name:    tableName,
+			Columns: make([]tableColumn, 0, 15),
+		}
+
+		sql := `
+			SELECT 
+				column_name, 
+				data_type 
+			FROM 
+				information_schema.columns
+			WHERE 
+				table_name = $1;
+		`
+
+		if rows, err = db.Query(context.Background(), sql, tableName); err != nil {
+			return result, err
+		}
+
+		var columnname string
+		var datatype string
+
+		var actualDataType string
+		var ok bool
+
+		for rows.Next() {
+			if err = rows.Scan(&columnname, &datatype); err != nil {
+				return result, err
+			}
+
+			if actualDataType, ok = postgresDatatypes[datatype]; !ok {
+				actualDataType = "string"
+			}
+
+			c := tableColumn{
+				Name:     columnname,
+				DataType: actualDataType,
+			}
+
+			t.Columns = append(t.Columns, c)
+		}
+
+		result = append(result, t)
+	}
+
+	return result, nil
+}
+
+func generateModelFromTable(table tableStruct) (string, error) {
+	var (
+		err error
+	)
+
+	tmpl := `package main
+{{if .HasTime}}
+import (
+	"time"
+)
+{{end}}
+type {{.Name}} struct {
+	{{range .Columns}}{{.Name}} {{.DataType}} ` + "`json:\"{{.JsonName}}\"`" + `
+	{{end}}
+}
+`
+
+	type tempTableColumn struct {
+		Name     string
+		DataType string
+		JsonName string
+	}
+
+	data := struct {
+		Name    string
+		HasTime bool
+		Columns []tempTableColumn
+	}{
+		Name:    strcase.ToCamel(table.Name),
+		Columns: make([]tempTableColumn, 0, 15),
+	}
+
+	for _, c := range table.Columns {
+		newColumn := tempTableColumn{
+			Name:     strcase.ToCamel(c.Name),
+			DataType: c.DataType,
+			JsonName: strcase.ToLowerCamel(c.Name),
+		}
+
+		if c.DataType == "time.Time" {
+			data.HasTime = true
+		}
+
+		data.Columns = append(data.Columns, newColumn)
+	}
+
+	t := template.Must(template.New(table.Name).Parse(tmpl))
+	b := strings.Builder{}
+
+	if err = t.Execute(&b, data); err != nil {
+		return "", err
+	}
+
+	return b.String(), nil
+}
+
+func hasSpace(value string) bool {
+	return strings.ContainsAny(value, "  \t")
 }

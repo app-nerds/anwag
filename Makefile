@@ -4,11 +4,11 @@
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
-VERSION=1.0.0
+VERSION := $(shell cat ./VERSION)
 BUILDFLAGS=-s -w -X 'main.Version=${VERSION}'
 PROJECTNAME=anwag
 GOENV=CGO_ENABLED=0 GOPRIVATE="github.com/app-nerds/*" GONOPROXY="github.com/app-nerds/*"
-GC=${GOENV} go build -ldflags="${BUILDFLAGS}" -o ${PROJECTNAME}
+GC=${GOENV} go build -ldflags="${BUILDFLAGS}" -mod=mod -o ${PROJECTNAME}
 
 ifeq ($(OS),Windows_NT)
 	GOOS=windows
@@ -60,3 +60,15 @@ build-linux: ## Create a compiled Linux binary (amd64)
 
 build: ## Automatically determine OS and Architecture, and build an executable
 	GOOS=${GOOS} GOARCH=${GOARCH} ${GC}
+
+build-all: ## Build Windows, Linux, Mac 
+	GOOS=windows GOARCH=amd64 ${GC}-windows-${VERSION}.exe
+	GOOS=darwin GOARCH=arm64 ${GC}-darwin-${VERSION}
+	GOOS=darwin GOARCH=amd64 ${GC}-darwin-amd64-${VERSION}
+	GOOS=linux GOARCH=amd64 ${GC}-linux-${VERSION}
+
+package: ## Package executables into a ZIP file
+	zip  ./${PROJECTNAME}-linux-amd64-${VERSION}.zip ./*linux*
+	zip  ./${PROJECTNAME}-windows-amd64-${VERSION}.zip ./*windows*
+	zip ./${PROJECTNAME}-darwin-${VERSION}.zip ./*darwin*
+
