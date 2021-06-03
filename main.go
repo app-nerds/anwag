@@ -97,6 +97,10 @@ func main() {
 		"gitignore.tmpl":                 ".gitignore",
 		"create.sql.tmpl":                "devops/sql/create.sql",
 		"env.tmpl":                       ".env",
+		"VERSION.tmpl":                   "VERSION",
+		"README.md.tmpl":                 "README.md",
+		"CHANGELOG.md.tmpl":              "CHANGELOG.md",
+		"go.yml.tmpl":                    ".github/workflows/go.yml",
 	}
 
 	appFsMapping := map[string]string{
@@ -163,6 +167,7 @@ func main() {
 		"app/tests/unit",
 		"devops/sql",
 		"docs",
+		".github/workflows",
 	}
 
 	for _, dirname := range subdirs {
@@ -250,6 +255,17 @@ func main() {
 	}
 
 	fmt.Printf("   make run\n\n")
+
+	fmt.Printf("\n")
+	fmt.Printf("☁ Please note that this project is also setup to use Github Actions.\n")
+	fmt.Printf("Anytime a tag in the format of 'v*.*.*' is pushed to origin\n")
+	fmt.Printf("the code is built and a Release is created. Ensure you update\n")
+	fmt.Printf("the VERSION and CHANGELOG.md files before pushing a tag.\n")
+
+	fmt.Printf("\n")
+	fmt.Printf("Before this works, however, you'll need to setup a secret in your\n")
+	fmt.Printf("repository called ACTIONS_TOKEN. This should contain a Personal\n")
+	fmt.Printf("Access Token that has access to private repositories.\n")
 }
 
 func stringPrompt(label, defaultValue string) string {
@@ -291,22 +307,3 @@ func yesNoPrompt(label string) bool {
 
 	return false
 }
-
-// func loadTemplate(name string) *template.Template {
-// 	kk
-// 	fullPath := filepath.Join("./templates", name+".tmpl")
-
-// 	result, err := os.ReadFile(fullPath)
-
-// 	if err != nil {
-// 		logrus.WithError(err).Fatalf("error reading template file %s", fullPath)
-// 	}
-
-// 	tmpl, err := template.New(name).Parse(string(result))
-
-// 	if err != nil {
-// 		logrus.WithError(err).Fatalf("error parsing template %s", fullPath)
-// 	}
-
-// 	return tmpl
-// }
