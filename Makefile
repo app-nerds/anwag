@@ -12,6 +12,7 @@ GC=${GOENV} go build -ldflags="${BUILDFLAGS}" -mod=mod -o ${PROJECTNAME}
 
 ifeq ($(OS),Windows_NT)
 	GOOS=windows
+	EXENAME=${PROJECTNAME}.exe
 	ifeq ($(PROCESSOR_ARCHITEW6432),AMD64)
 		GOARCH=amd64
 	else
@@ -26,8 +27,10 @@ else
 	UNAME_S := $(shell uname -s)
 	ifeq ($(UNAME_S),Linux)
 		GOOS=linux
+		EXENAME=${PROJECTNAME}
 	endif
 	ifeq ($(UNAME_S),Darwin)
+		EXENAME=${PROJECTNAME}
 		GOOS=darwin
 	endif
 	UNAME_P := $(shell uname -p)
@@ -75,3 +78,5 @@ package: ## Package executables into a ZIP file
 	zip  ./${PROJECTNAME}-windows-amd64-${VERSION}.zip ./*windows*
 	zip ./${PROJECTNAME}-darwin-${VERSION}.zip ./*darwin*
 
+install: build ## Create a symlink to this executable in /usr/local/bin
+	ln -s $(PWD)/${EXENAME} /usr/local/bin/${EXENAME}
