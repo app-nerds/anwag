@@ -79,4 +79,5 @@ package: ## Package executables into a ZIP file
 	zip ./${PROJECTNAME}-darwin-${VERSION}.zip ./*darwin*
 
 install: build ## Create a symlink to this executable in /usr/local/bin
+	rm /usr/local/bin/${EXENAME}
 	ln -s $(PWD)/${EXENAME} /usr/local/bin/${EXENAME}
