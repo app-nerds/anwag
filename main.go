@@ -424,16 +424,16 @@ func main() {
 	/*
 	 * Do the steps the initialze the new app
 	 */
-	if err = modDownload(); err != nil {
-		logrus.WithError(err).Fatalf("Error downloading Go modules")
-	}
-
 	if err = npmInstall(); err != nil {
 		logrus.WithError(err).Fatalf("Error installing Node modules")
 	}
 
 	if err = buildNode(); err != nil {
 		logrus.WithError(err).Fatalf("Error building NodeJS app")
+	}
+
+	if err = modDownload(); err != nil {
+		logrus.WithError(err).Fatalf("Error downloading Go modules")
 	}
 
 	fmt.Printf("\n🎉 Congratulations! Your new application is ready.\n")
@@ -646,10 +646,20 @@ func hasSpace(value string) bool {
 }
 
 func modDownload() error {
-	cmd := exec.Command("go", "mod", "download")
-	fmt.Printf("Downloading Go modules...\n")
+	var (
+		err error
+	)
 
-	err := cmd.Run()
+	fmt.Printf("Downloading Go modules...\n")
+	cmd := exec.Command("go", "mod", "download")
+
+	if err = cmd.Run(); err != nil {
+		return err
+	}
+
+	cmd = exec.Command("go", "get")
+	err = cmd.Run()
+
 	return err
 }
 
