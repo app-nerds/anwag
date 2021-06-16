@@ -19,7 +19,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/sirupsen/logrus"
-	"github.com/spf13/viper"
 	echoSwagger "github.com/swaggo/echo-swagger"
 )
 
@@ -41,7 +40,7 @@ const (
 var (
 	Version = "development"
 
-	config *viper.Viper
+	config Config
 	logger *logrus.Entry
 	server *echo.Echo{{if .WantDatabase}}
 	db     *pgx.Conn{{end}}
@@ -72,7 +71,7 @@ func main() {
 	config = NewConfig(Version)
 	logger = logrus.New().WithField("who", APP_NAME)
 
-	if loglevel, err = logrus.ParseLevel(config.GetString("server.loglevel")); err != nil {
+	if loglevel, err = logrus.ParseLevel(config.ServerLogLevel); err != nil {
 		logger.Fatal("invalid log level")
 	}
 
@@ -86,7 +85,7 @@ func main() {
 
 connectToDB:
 
-	if db, err = pgx.Connect(context.Background(), config.GetString("database.url")); err != nil {
+	if db, err = pgx.Connect(context.Background(), config.DatabaseURL); err != nil {
 		logger.WithError(err).Errorf("unable to connect to database. will attempt again in %ds", connectionWaitTime)
 
 		if connectionTries < MAX_DB_CONNECTION_ATTEMPTS {
@@ -129,20 +128,17 @@ connectToDB:
 	 * Start the server
 	 */
 	go func() {
-		certFileName := config.GetString("server.cert")
-		serverHost := config.GetString("server.host")
-
 		logger.WithFields(logrus.Fields{
-			"host":          serverHost,
-			"serverVersion": config.GetString("server.version"),
-			"logLevel":      config.GetString("server.loglevel"),
-			"cert":          certFileName,
+			"host":          config.ServerHost,
+			"serverVersion": config.Version,
+			"logLevel":      config.ServerLogLevel,
+			"cert":          config.ServerCert,
 		}).Info("starting server...")
 
-		if certFileName != "" {
-			err = server.StartTLS(serverHost, fmt.Sprintf("%s.pem", certFileName), fmt.Sprintf("%s.key", certFileName))
+		if config.ServerCert != "" {
+			err = server.StartTLS(config.ServerHost, fmt.Sprintf("%s.pem", config.ServerCert), fmt.Sprintf("%s.key", config.ServerCert))
 		} else {
-			err = server.Start(serverHost)
+			err = server.Start(config.ServerHost)
 		}
 
 		if err != http.ErrServerClosed {

@@ -3,12 +3,26 @@ package main
 import (
 	"flag"
 	"fmt"
+	{{- if .WantDatabase}}
+	"time"{{end}}
 
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
-func NewConfig(serverVersion string) *viper.Viper {
+type Config struct {
+	Version string
+
+	ServerHost string
+	ServerLogLevel string
+	ServerCert string
+	{{- if .WantDatabase}}
+
+	DatabaseURL string
+	DatabaseTimeout time.Duration{{end}}
+}
+
+func NewConfig(serverVersion string) Config {
 	result := viper.New()
 	result.Set("server.version", serverVersion)
 
@@ -26,12 +40,25 @@ func NewConfig(serverVersion string) *viper.Viper {
 
 	result.SetDefault("database.url", fmt.Sprintf("postgres://%s:%s@%s/%s", DEFAULT_DB_USER, DEFAULT_DB_PASSWORD, DEFAULT_DB_HOST, DEFAULT_DB_NAME))
 	result.BindEnv("database.url", fmt.Sprintf("%s_DATABASE_URL", ENV_PREFIX))
-	flag.String("database.url", fmt.Sprintf("postgres://%s:%s@%s/%s", DEFAULT_DB_USER, DEFAULT_DB_PASSWORD, DEFAULT_DB_HOST, DEFAULT_DB_NAME), "URL for connecting to a database"){{end}}
+	flag.String("database.url", fmt.Sprintf("postgres://%s:%s@%s/%s", DEFAULT_DB_USER, DEFAULT_DB_PASSWORD, DEFAULT_DB_HOST, DEFAULT_DB_NAME), "URL for connecting to a database")
+
+	result.SetDefault("database.timeout", 10)
+	result.BindEnv("database.timeout", fmt.Sprintf("%s_DATABASE_TIMEOUT", ENV_PREFIX))
+	flag.Int("database.timeout", 10, "Database query timeout in seconds. Default 10 seconds"){{end}}
 
 	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
 	pflag.Parse()
 	result.BindPFlags(pflag.CommandLine)
 
-	return result
+	config := Config{
+		Version: result.GetString("server.version"),
+		ServerHost: result.GetString("server.host"),
+		ServerLogLevel: result.GetString("server.loglevel"),
+		ServerCert: result.GetString("server.cert"),{{- if .WantDatabase}}
+		DatabaseURL: result.GetString("database.url"),
+		DatabaseTimeout: result.GetDuration("database.timeout"),{{end}}
+	}
+
+	return config
 }
 
