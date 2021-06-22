@@ -6,11 +6,13 @@ package main
 
 import (
 	"context"
-	"embed"
+	{{- if .WantFrontend}}
+	"embed"{{end}}
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
+	{{- if .WantFrontend}}
+	"os/exec"{{end}}
 	"os/signal"
 	"syscall"
 	"time"
@@ -45,11 +47,12 @@ var (
 	server *echo.Echo{{if .WantDatabase}}
 	db     *pgx.Conn{{end}}
 
+	{{- if .WantFrontend}}
 	//go:embed app/dist/index.html app/dist/favicon.ico
 	//go:embed app/dist/css/*
 	//go:embed app/dist/js/*
 	//go:embed app/dist/img/*
-	appFs embed.FS
+	appFs embed.FS{{end}}
 
 	// Services
 
@@ -118,7 +121,8 @@ connectToDB:
 	server.Use(middleware.CORS())
 
 	server.GET("/swagger/*", echoSwagger.WrapHandler)
-	server.GET("/*", echo.WrapHandler(http.FileServer(getClientAppFileSystem(Version == "development"))))
+	{{- if .WantFrontend}}
+	server.GET("/*", echo.WrapHandler(http.FileServer(getClientAppFileSystem(Version == "development")))){{end}}
 
 	apiV1 := server.Group("/api/v1")
 
@@ -148,7 +152,7 @@ connectToDB:
 		}
 	}()
 
-	/*
+	{{- if .WantFrontend}}/*
 	 * Start the Node client app
 	 */
 	if Version == "development" {
@@ -165,10 +169,10 @@ connectToDB:
 			cmd.Wait()
 			logger.Info("Stopping Node development server...")
 		}()
-	}
+	}{{end}}
 
 	/*
-	 * Wait for and stop both the Go and Node apps
+	 * Wait for a kill signal
 	 */
 	quit := make(chan os.Signal)
 	signal.Notify(quit, os.Interrupt, syscall.SIGQUIT, syscall.SIGTERM)

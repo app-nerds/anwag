@@ -1,15 +1,15 @@
 version: '3'
 
 services:
-  starter:
+  {{.AppName}}:
     container_name: {{.AppName}}
     build:
       context: .
       dockerfile: Dockerfile
       args:
         GITHUB_TOKEN: ${GITHUB_TOKEN}
-    depends_on:
-      - postgres
+   {{- if .WantDatabase}}depends_on:
+     - postgres{{end}}
     networks:
       - front-end{{if .WantDatabase}}
       - back-end{{end}}

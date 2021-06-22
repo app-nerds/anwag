@@ -22,6 +22,7 @@ import (
 )
 
 var (
+	// Version is populated when building. This is the version of this application
 	Version string = "development"
 
 	//go:embed templates/*.tmpl
@@ -36,13 +37,15 @@ var (
 type appValues struct {
 	Year string
 
-	CompanyName string
-	Title       string
-	AppName     string
-	EnvPrefix   string
-	Description string
-	Email       string
-	GithubPath  string
+	CompanyName   string
+	Title         string
+	AppName       string
+	EnvPrefix     string
+	Description   string
+	Email         string
+	GithubPath    string
+	GithubSSHPath string
+	WantFrontend  bool
 
 	WantDatabase bool
 	DbHost       string
@@ -62,6 +65,13 @@ type tableStruct struct {
 type tableColumn struct {
 	Name     string
 	DataType string
+}
+
+type mappingType struct {
+	TemplateName string
+	OutputName   string
+	IsFrontend   bool
+	IsDatabase   bool
 }
 
 var postgresDatatypes = map[string]string{
@@ -100,28 +110,10 @@ func main() {
 	fmt.Printf("   Swag - https://github.com/swaggo/swag\n")
 	fmt.Printf("   NodeJS - https://nodejs.org\n")
 	fmt.Printf("   Vue CLI - https://cli.vuejs.org\n")
+	fmt.Printf("   Docker - https://www.docker.com\n")
 	fmt.Printf("\n")
 
 	firstQuestions := []*survey.Question{
-		{
-			Name: "GithubPath",
-			Prompt: &survey.Input{
-				Message: "Enter the Github path for this application's home repo",
-				Help:    "This should be the path to a Github repository. eg. github.com/app-nerds/my-new-app",
-			},
-			Validate: survey.Required,
-		},
-		{
-			Name:   "CompanyName",
-			Prompt: &survey.Input{Message: "Company name", Default: "App Nerds"},
-		},
-		{
-			Name: "Title",
-			Prompt: &survey.Input{
-				Message: "Title",
-				Help:    "This value is used in the browser title and README",
-			},
-		},
 		{
 			Name: "AppName",
 			Prompt: &survey.Input{
@@ -137,18 +129,15 @@ func main() {
 			}),
 		},
 		{
-			Name: "EnvPrefix",
+			Name:   "CompanyName",
+			Prompt: &survey.Input{Message: "Company name", Default: "App Nerds"},
+		},
+		{
+			Name: "Title",
 			Prompt: &survey.Input{
-				Message: "Environment variable prefix",
-				Help:    "This prefix will be applied to configuration values pulled from the environment. eg. PREFIX_SERVER_HOST. No spaces allowed.",
+				Message: "Title",
+				Help:    "This value is used in the browser title and README",
 			},
-			Transform: survey.TransformString(func(s string) string {
-				upper := strings.ToUpper(s)
-				nospaces := strings.ReplaceAll(upper, " ", "")
-				notabs := strings.ReplaceAll(nospaces, "\t", "")
-
-				return notabs
-			}),
 		},
 		{
 			Name:   "Description",
@@ -157,17 +146,6 @@ func main() {
 		{
 			Name:   "Email",
 			Prompt: &survey.Input{Message: "Enter your email address"},
-		},
-		{
-			Name: "GithubToken",
-			Prompt: &survey.Input{
-				Message: "Enter your Github Personal Access Token",
-				Help:    "This is used for accessing private repos in Docker builds. See https://docs.github.com/en/github/authenticating-to-github/keeping-your-account-and-data-secure/creating-a-personal-access-token",
-			},
-		},
-		{
-			Name:   "WantDatabase",
-			Prompt: &survey.Confirm{Message: "Would you like to use a database?", Default: false},
 		},
 	}
 
@@ -180,7 +158,84 @@ func main() {
 		logrus.WithError(err).Fatalf("There was an error!")
 	}
 
+	secondQuestions := []*survey.Question{
+		{
+			Name: "GithubPath",
+			Prompt: &survey.Input{
+				Message: "Enter the Github path for this application's home repo",
+				Help:    "This should be the path to a Github repository. eg. github.com/app-nerds/my-new-app",
+				Suggest: func(toComplete string) []string {
+					return []string{
+						"github.com/app-nerds/" + values.AppName,
+					}
+				},
+			},
+			Validate: survey.Required,
+		},
+		{
+			Name: "EnvPrefix",
+			Prompt: &survey.Input{
+				Message: "Environment variable prefix",
+				Help:    "This prefix will be applied to configuration values pulled from the environment. eg. PREFIX_SERVER_HOST. No spaces allowed.",
+				Suggest: func(toComplete string) []string {
+					upper := strings.ToUpper(values.AppName)
+					nospaces := strings.ReplaceAll(upper, " ", "")
+					notabs := strings.ReplaceAll(nospaces, "\t", "")
+					nohyphens := strings.ReplaceAll(notabs, "-", "_")
+
+					return []string{
+						nohyphens,
+					}
+				},
+			},
+			Transform: survey.TransformString(func(s string) string {
+				upper := strings.ToUpper(s)
+				nospaces := strings.ReplaceAll(upper, " ", "")
+				notabs := strings.ReplaceAll(nospaces, "\t", "")
+
+				return notabs
+			}),
+		},
+		{
+			Name: "GithubToken",
+			Prompt: &survey.Input{
+				Message: "Enter your Github Personal Access Token",
+				Help:    "This is used for accessing private repos in Docker builds. See https://docs.github.com/en/github/authenticating-to-github/keeping-your-account-and-data-secure/creating-a-personal-access-token",
+				Suggest: func(toComplete string) []string {
+					value := os.Getenv("GITHUB_TOKEN")
+
+					if value == "" {
+						return []string{}
+					}
+
+					return []string{
+						value,
+					}
+				},
+			},
+		},
+		{
+			Name:   "WantDatabase",
+			Prompt: &survey.Confirm{Message: "Would you like to use a database?", Default: false},
+		},
+		{
+			Name:   "WantFrontend",
+			Prompt: &survey.Confirm{Message: "Would you like to add a VueJS front-end application?", Default: true},
+		},
+	}
+
+	if err = survey.Ask(secondQuestions, &values); err != nil {
+		if err == terminal.InterruptErr {
+			fmt.Printf("\nCancelling.\n")
+			os.Exit(-1)
+		}
+
+		logrus.WithError(err).Fatalf("There was an error!")
+	}
+
 	if values.WantDatabase {
+	databaseQuestions:
+
 		dbQuestions := []*survey.Question{
 			{
 				Name:     "DbHost",
@@ -188,23 +243,42 @@ func main() {
 				Validate: survey.Required,
 			},
 			{
-				Name:     "DbUser",
-				Prompt:   &survey.Input{Message: "User name"},
+				Name: "DbUser",
+				Prompt: &survey.Input{
+					Message: "User name",
+					Suggest: func(toComplete string) []string {
+						return []string{
+							"root",
+						}
+					},
+				},
 				Validate: survey.Required,
 			},
 			{
-				Name:     "DbPassword",
-				Prompt:   &survey.Password{Message: "Password"},
+				Name: "DbPassword",
+				Prompt: &survey.Password{
+					Message: "Password",
+				},
 				Validate: survey.Required,
 			},
 			{
-				Name:     "DbName",
-				Prompt:   &survey.Input{Message: "Database name"},
+				Name: "DbName",
+				Prompt: &survey.Input{
+					Message: "Database name",
+					Suggest: func(toComplete string) []string {
+						return []string{
+							values.AppName,
+						}
+					},
+				},
 				Validate: survey.Required,
 			},
 			{
-				Name:   "WantModel",
-				Prompt: &survey.Confirm{Message: "Would you like to generate Go models?"},
+				Name: "WantModel",
+				Prompt: &survey.Confirm{
+					Message: "Would you like to generate Go models?",
+					Help:    "Only choose yes if you have an existing database with tables. Choosing yes will read this database and get table names for you to choose from",
+				},
 			},
 		}
 
@@ -219,8 +293,10 @@ func main() {
 
 		if values.WantModel {
 			if tableNames, err = getListOfTables(values); err != nil {
-				fmt.Printf("Uh oh! There was an error getting a list of tables!\n\n%s\n\nClosing.\n", err.Error())
-				os.Exit(-1)
+				fmt.Printf("\nUh oh! There was an error getting a list of tables!\nError: %s\n", err.Error())
+				fmt.Printf("Please try again.\n")
+
+				goto databaseQuestions
 			}
 
 			whichTablesPrompt := &survey.MultiSelect{
@@ -238,29 +314,34 @@ func main() {
 			}
 
 			if tables, err = getColumnsForTables(values, selectedTables); err != nil {
-				logrus.WithError(err).Fatalf("Error getting column information!")
+				fmt.Printf("\nUh oh! There was an error getting a list of columns!\nError: %s\n", err.Error())
+				fmt.Printf("Please try again.\n")
+
+				goto databaseQuestions
 			}
 		}
 	}
 
-	rootFsMapping := map[string]string{
-		"main.go.tmpl":                   "main.go",
-		"ClientApp.go.tmpl":              "ClientApp.go",
-		"Config.go.tmpl":                 "Config.go",
-		"docker-compose.yml.tmpl":        "docker-compose.yml",
-		"Dockerfile.tmpl":                "Dockerfile",
-		"go.mod.tmpl":                    "go.mod",
-		"Makefile.tmpl":                  "Makefile",
-		"VersionController.go.tmpl":      "VersionController.go",
-		"VersionController_test.go.tmpl": "VersionController_test.go",
-		"editorconfig.tmpl":              ".editorconfig",
-		"gitignore.tmpl":                 ".gitignore",
-		"create.sql.tmpl":                "devops/sql/create.sql",
-		"env.tmpl":                       ".env",
-		"VERSION.tmpl":                   "VERSION",
-		"README.md.tmpl":                 "README.md",
-		"CHANGELOG.md.tmpl":              "CHANGELOG.md",
-		"go.yml.tmpl":                    ".github/workflows/go.yml",
+	values.GithubSSHPath = generateSSHURL(values.GithubPath)
+
+	rootFsMapping := []mappingType{
+		{TemplateName: "main.go.tmpl", OutputName: "main.go"},
+		{TemplateName: "ClientApp.go.tmpl", OutputName: "ClientApp.go", IsFrontend: true},
+		{TemplateName: "Config.go.tmpl", OutputName: "Config.go"},
+		{TemplateName: "docker-compose.yml.tmpl", OutputName: "docker-compose.yml"},
+		{TemplateName: "Dockerfile.tmpl", OutputName: "Dockerfile"},
+		{TemplateName: "go.mod.tmpl", OutputName: "go.mod"},
+		{TemplateName: "Makefile.tmpl", OutputName: "Makefile"},
+		{TemplateName: "VersionController.go.tmpl", OutputName: "VersionController.go"},
+		{TemplateName: "VersionController_test.go.tmpl", OutputName: "VersionController_test.go"},
+		{TemplateName: "editorconfig.tmpl", OutputName: ".editorconfig"},
+		{TemplateName: "gitignore.tmpl", OutputName: ".gitignore"},
+		{TemplateName: "create.sql.tmpl", OutputName: "devops/sql/create.sql", IsDatabase: true},
+		{TemplateName: "env.tmpl", OutputName: ".env"},
+		{TemplateName: "VERSION.tmpl", OutputName: "VERSION"},
+		{TemplateName: "README.md.tmpl", OutputName: "README.md"},
+		{TemplateName: "CHANGELOG.md.tmpl", OutputName: "CHANGELOG.md"},
+		{TemplateName: "go.yml.tmpl", OutputName: ".github/workflows/go.yml"},
 	}
 
 	appFsMapping := map[string]string{
@@ -312,26 +393,34 @@ func main() {
 	}
 
 	subdirs = []string{
-		"app",
-		"app/dist/css",
-		"app/dist/js",
-		"app/dist/img",
-		"app/public",
-		"app/src/assets",
-		"app/src/assets/css",
-		"app/src/assets/images",
-		"app/src/modules",
-		"app/src/modules/ui",
-		"app/src/modules/ui/components",
-		"app/src/modules/ui/services",
-		"app/src/modules/version",
-		"app/src/modules/version/services",
-		"app/src/router",
-		"app/src/views",
-		"app/tests/unit",
-		"devops/sql",
 		"docs",
 		".github/workflows",
+	}
+
+	if values.WantFrontend {
+		subdirs = append(subdirs,
+			"app",
+			"app/dist/css",
+			"app/dist/js",
+			"app/dist/img",
+			"app/public",
+			"app/src/assets",
+			"app/src/assets/css",
+			"app/src/assets/images",
+			"app/src/modules",
+			"app/src/modules/ui",
+			"app/src/modules/ui/components",
+			"app/src/modules/ui/services",
+			"app/src/modules/version",
+			"app/src/modules/version/services",
+			"app/src/router",
+			"app/src/views",
+			"app/tests/unit",
+		)
+	}
+
+	if values.WantDatabase {
+		subdirs = append(subdirs, "devops/sql")
 	}
 
 	for _, dirname := range subdirs {
@@ -347,55 +436,65 @@ func main() {
 		logrus.WithError(err).Fatal("error parsing root templates files")
 	}
 
-	for templateName, outputPath := range rootFsMapping {
-		if fp, err = os.Create(outputPath); err != nil {
-			logrus.WithError(err).Fatalf("unable to create file %s for writing", outputPath)
+	for _, mt := range rootFsMapping {
+		if !values.WantFrontend && mt.IsFrontend {
+			continue
+		}
+
+		if !values.WantDatabase && mt.IsDatabase {
+			continue
+		}
+
+		if fp, err = os.Create(mt.OutputName); err != nil {
+			logrus.WithError(err).Fatalf("unable to create file %s for writing", mt.OutputName)
 		}
 
 		defer fp.Close()
 
-		if err = templates.ExecuteTemplate(fp, templateName, values); err != nil {
-			logrus.WithError(err).Fatalf("unable to exeucte template %s", templateName)
+		if err = templates.ExecuteTemplate(fp, mt.TemplateName, values); err != nil {
+			logrus.WithError(err).Fatalf("unable to exeucte template %s", mt.TemplateName)
 		}
 	}
 
 	/*
 	 * Process app filesystem templates
 	 */
-	if templates, err = template.ParseFS(appFs, "templates/app/*.tmpl"); err != nil {
-		logrus.WithError(err).Fatal("error parsing app template files")
-	}
-
-	for templateName, outputPath := range appFsMapping {
-		if fp, err = os.Create(outputPath); err != nil {
-			logrus.WithError(err).Fatalf("unable to create file %s for writing", outputPath)
+	if values.WantFrontend {
+		if templates, err = template.ParseFS(appFs, "templates/app/*.tmpl"); err != nil {
+			logrus.WithError(err).Fatal("error parsing app template files")
 		}
 
-		defer fp.Close()
+		for templateName, outputPath := range appFsMapping {
+			if fp, err = os.Create(outputPath); err != nil {
+				logrus.WithError(err).Fatalf("unable to create file %s for writing", outputPath)
+			}
 
-		if err = templates.ExecuteTemplate(fp, templateName, values); err != nil {
-			logrus.WithError(err).Fatalf("unable to execute template %s", templateName)
-		}
-	}
+			defer fp.Close()
 
-	/*
-	 * Copy static assets
-	 */
-	for sourceFile, targetFile := range staticFilesMapping {
-		if sourceFp, err = appFs.Open(sourceFile); err != nil {
-			logrus.WithError(err).Fatalf("unable to read static asset %s", sourceFile)
+			if err = templates.ExecuteTemplate(fp, templateName, values); err != nil {
+				logrus.WithError(err).Fatalf("unable to execute template %s", templateName)
+			}
 		}
 
-		defer sourceFp.Close()
+		/*
+		 * Copy static assets
+		 */
+		for sourceFile, targetFile := range staticFilesMapping {
+			if sourceFp, err = appFs.Open(sourceFile); err != nil {
+				logrus.WithError(err).Fatalf("unable to read static asset %s", sourceFile)
+			}
 
-		if fp, err = os.Create(targetFile); err != nil {
-			logrus.WithError(err).Fatalf("unable to create file %s for writing", targetFile)
-		}
+			defer sourceFp.Close()
 
-		defer fp.Close()
+			if fp, err = os.Create(targetFile); err != nil {
+				logrus.WithError(err).Fatalf("unable to create file %s for writing", targetFile)
+			}
 
-		if _, err = io.Copy(fp, sourceFp); err != nil {
-			logrus.WithError(err).Fatalf("error copying static asset %s to %s", sourceFile, targetFile)
+			defer fp.Close()
+
+			if _, err = io.Copy(fp, sourceFp); err != nil {
+				logrus.WithError(err).Fatalf("error copying static asset %s to %s", sourceFile, targetFile)
+			}
 		}
 	}
 
@@ -424,16 +523,22 @@ func main() {
 	/*
 	 * Do the steps the initialze the new app
 	 */
-	if err = npmInstall(); err != nil {
-		logrus.WithError(err).Fatalf("Error installing Node modules")
-	}
+	if values.WantFrontend {
+		if err = npmInstall(); err != nil {
+			logrus.WithError(err).Fatalf("Error installing Node modules")
+		}
 
-	if err = buildNode(); err != nil {
-		logrus.WithError(err).Fatalf("Error building NodeJS app")
+		if err = buildNode(); err != nil {
+			logrus.WithError(err).Fatalf("Error building NodeJS app")
+		}
 	}
 
 	if err = modDownload(); err != nil {
 		logrus.WithError(err).Fatalf("Error downloading Go modules")
+	}
+
+	if err = gitInit(); err != nil {
+		logrus.WithError(err).Fatalf("Error initializing Git repository")
 	}
 
 	fmt.Printf("\n🎉 Congratulations! Your new application is ready.\n")
@@ -597,7 +702,7 @@ import (
 )
 {{end}}
 type {{.Name}} struct {
-	{{range .Columns}}{{.Name}} {{.DataType}} ` + "`json:\"{{.JsonName}}\"`" + `
+	{{range .Columns}}{{.Name}} {{.DataType}} ` + "`json:\"{{.JSONName}}\"`" + `
 	{{end}}
 }
 `
@@ -605,7 +710,7 @@ type {{.Name}} struct {
 	type tempTableColumn struct {
 		Name     string
 		DataType string
-		JsonName string
+		JSONName string
 	}
 
 	data := struct {
@@ -621,7 +726,7 @@ type {{.Name}} struct {
 		newColumn := tempTableColumn{
 			Name:     strcase.ToCamel(c.Name),
 			DataType: c.DataType,
-			JsonName: strcase.ToLowerCamel(c.Name),
+			JSONName: strcase.ToLowerCamel(c.Name),
 		}
 
 		if c.DataType == "time.Time" {
@@ -643,6 +748,20 @@ type {{.Name}} struct {
 
 func hasSpace(value string) bool {
 	return strings.ContainsAny(value, "  \t")
+}
+
+func generateSSHURL(githubPath string) string {
+	var (
+		split []string
+	)
+
+	split = strings.Split(githubPath, "/")
+
+	if len(split) < 3 {
+		return fmt.Sprintf("https://%s", githubPath)
+	}
+
+	return fmt.Sprintf("git@%s:%s/%s.git", split[0], split[1], split[2])
 }
 
 func modDownload() error {
@@ -707,4 +826,16 @@ func buildNode() error {
 	}
 
 	return nil
+}
+
+func gitInit() error {
+	var (
+		err error
+	)
+
+	fmt.Printf("Initialize Git repository... \n")
+	cmd := exec.Command("git", "init")
+
+	err = cmd.Run()
+	return err
 }

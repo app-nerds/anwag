@@ -46,6 +46,12 @@ endif
 # Local dev tasks
 #
 
+setup: ## Perform initial setup of dependencies. Requires Go 1.16{{- if .WantFrontend}} and NodeJS{{end}}
+	{{- if .WantFrontend}}
+	cd app && npm install && npm run build{{end}}
+	go mod download
+	go get
+
 bench: ## Run all benchmark tests
 	go test ./... -bench=.
 
@@ -62,30 +68,32 @@ run: ## Run the application for local development
 # Build tasks
 #
 
-build: build-client-appp ## Automatically determine OS and Architecture, and build an executable
+build:{{- if.WantFrontend}} build-client-app{{end}} ## Automatically determine OS and Architecture, and build an executable
 	GOOS=${GOOS} GOARCH=${GOARCH} ${GC}
 
-build-windows: build-client-app ## Create a compiled Windows binary
+build-windows:{{- if.WantFrontend}} build-client-app{{end}} ## Create a compiled Windows binary
 	GOOS=windows GOARCH=amd64 ${GC}-windows-${VERSION}.exe
 
-build-mac: build-client-app ## Create a compiled MacOS binary (arm64)
+build-mac:{{- if.WantFrontend}} build-client-app{{end}} ## Create a compiled MacOS binary (arm64)
 	GOOS=darwin GOARCH=arm64 ${GC}-darwin-arm64-${VERSION}
 
-build-mac-amd: build-client-app ## Create a compiled MacOS binary (amd64)
+build-mac-amd:{{- if.WantFrontend}} build-client-app{{end}} ## Create a compiled MacOS binary (amd64)
 	GOOS=darwin GOARCH=amd64 ${GC}-darwin-${VERSION}
 
-build-linux: build-client-app ## Create a compiled Linux binary (amd64)
+build-linux:{{- if.WantFrontend}} build-client-app{{end}} ## Create a compiled Linux binary (amd64)
 	GOOS=linux GOARCH=amd64 ${GC}-linux-${VERSION}
 
-build-all: build-client-app ## Build all architectures
+build-all:{{- if.WantFrontend}} build-client-app{{end}} ## Build all architectures
 	GOOS=windows GOARCH=amd64 ${GC}-windows-${VERSION}.exe
 	GOOS=darwin GOARCH=arm64 ${GC}-darwin-arm64-${VERSION}
 	GOOS=darwin GOARCH=amd64 ${GC}-darwin-${VERSION}
 	GOOS=linux GOARCH=amd64 ${GC}-linux-${VERSION}
+
+{{- if .WantFrontend}}
 
 build-client-app: 
 	cd app && npm run build
-
+{{end}}
 package: ## Package executables into a ZIP file
 	zip  ./{{.AppName}}-linux-amd64-${VERSION}.zip ./*linux*
 	zip  ./{{.AppName}}-darwin-${VERSION}.zip ./*darwin*
@@ -95,7 +103,7 @@ package: ## Package executables into a ZIP file
 # Docker tasks
 #
 
-{{if .WantDatabase}}start-postgres: ## Starts a Postgres server in Docker
+{{- if .WantDatabase}}start-postgres: ## Starts a Postgres server in Docker
 	docker-compose -f docker-compose.yml up postgres{{end}}
 
 run-docker: ## Starts all containers in Docker
