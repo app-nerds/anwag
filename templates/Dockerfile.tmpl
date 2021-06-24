@@ -14,7 +14,7 @@ RUN git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "htt
 #
 COPY go.mod .
 COPY go.sum .
-RUN GOPRIVATE="giuthub.com/app-nerds/*" GONOPROXY="github.com/app-nerds/*" go mod download
+RUN GOPRIVATE="github.com/app-nerds/*" GONOPROXY="github.com/app-nerds/*" go mod download
 
 #
 # Setup and install Node, Vue, and Swaggo

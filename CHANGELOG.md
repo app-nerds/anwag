@@ -2,6 +2,10 @@
 
 All notable changes will be docmented here.
 
+## 1.4.1
+
+* Fixed typo in generated Dockerfile
+
 ## 1.4.0
 
 * Reorganized questions so the app can now offer suggestions for later answers
