@@ -1,108 +1,57 @@
 package main
 
 import (
-	"context"
 	"embed"
 	"errors"
 	"fmt"
-	"io"
-	"io/fs"
+	// "io"
+	// "io/fs"
 	"os"
 	"os/exec"
 	"strings"
-	"text/template"
-	"time"
+	// "text/template"
 
-	"github.com/AlecAivazis/survey/v2"
-	"github.com/AlecAivazis/survey/v2/terminal"
-	"github.com/app-nerds/postgresr"
-	"github.com/iancoleman/strcase"
-	"github.com/jackc/pgx/v4"
-	"github.com/sirupsen/logrus"
+	// "github.com/app-nerds/anwag/internal"
+	"github.com/app-nerds/anwag/internal/answercontext"
+	"github.com/app-nerds/anwag/internal/generators"
+	"github.com/app-nerds/anwag/internal/questioners"
+	"github.com/app-nerds/anwag/internal/typesofapps"
+	"github.com/app-nerds/kit/v6/filesystem"
+	"github.com/app-nerds/kit/v6/filesystem/localfs"
+	// "github.com/iancoleman/strcase"
+	// "github.com/sirupsen/logrus"
 )
 
 var (
 	// Version is populated when building. This is the version of this application
 	Version string = "development"
 
-	//go:embed templates/*.tmpl
+	//go:embed templates/base/*.tmpl
+	//go:embed templates/emptyapp/*.tmpl
 	rootFs embed.FS
-
-	//go:embed templates/app/*.tmpl
-	//go:embed templates/app/favicon.ico
-	//go:embed templates/app/app-nerds-logo.jpg
-	appFs embed.FS
 )
-
-type appValues struct {
-	Year string
-
-	CompanyName   string
-	Title         string
-	AppName       string
-	EnvPrefix     string
-	Description   string
-	Email         string
-	GithubPath    string
-	GithubSSHPath string
-	WantFrontend  bool
-
-	WantDatabase bool
-	DbHost       string
-	DbUser       string
-	DbPassword   string
-	DbName       string
-	WantModel    bool
-
-	GithubToken string
-}
-
-type tableStruct struct {
-	Name    string
-	Columns []tableColumn
-}
-
-type tableColumn struct {
-	Name     string
-	DataType string
-}
-
-type mappingType struct {
-	TemplateName string
-	OutputName   string
-	IsFrontend   bool
-	IsDatabase   bool
-}
-
-var postgresDatatypes = map[string]string{
-	"bigint":                      "int",
-	"bit":                         "bool",
-	"character varying":           "string",
-	"integer":                     "int",
-	"numeric":                     "float64",
-	"smallint":                    "int",
-	"text":                        "string",
-	"time without time zone":      "time.Time",
-	"timestamp without time zone": "time.Time",
-	"uuid":                        "string",
-}
 
 func main() {
 	var (
-		err            error
-		fp             *os.File
-		sourceFp       fs.File
-		templates      *template.Template
-		subdirs        []string
-		tableNames     []string
-		selectedTables []string
-		tables         []tableStruct
+		err error
+		// basicQuestioner       internal.Questioner
+		// appSettingsQuestioner internal.Questioner
+		// dbQuestioner          internal.Questioner
+		// fp                    filesystem.WritableFile
+		// sourceFp              fs.File
+		// templates             *template.Template
+		// subdirs               []string
+		// tableNames            []string
+		// selectedTables        []string
+		// tables                []tableStruct
 	)
 
-	values := appValues{
-		Year:         time.Now().Format("2006"),
-		WantDatabase: false,
-	}
+	localFS := localfs.NewLocalFS()
+	context := answercontext.NewContext()
+
+	// basicQuestioner = internal.BasicsQuestioner{}
+	// appSettingsQuestioner = internal.AppSettingsQuestioner{}
+	// dbQuestioner = internal.DatabaseQuestioner{}
 
 	fmt.Printf("\n🙏 Welcome to App Nerds Web Application Generator (%s)\n\n", Version)
 	fmt.Printf("Please note that you'll need the following tools to develop in this application:\n")
@@ -113,437 +62,252 @@ func main() {
 	fmt.Printf("   Docker - https://www.docker.com\n")
 	fmt.Printf("\n")
 
-	firstQuestions := []*survey.Question{
-		{
-			Name: "AppName",
-			Prompt: &survey.Input{
-				Message: "Application name",
-				Help:    "This is used primary as the final executable name. There should be no spaces in this name. Spaces will be replaced with hyphens",
-			},
-			Transform: survey.TransformString(func(s string) string {
-				lower := strings.ToLower(s)
-				nospaces := strings.ReplaceAll(lower, " ", "-")
-				notabs := strings.ReplaceAll(nospaces, "\t", "-")
-
-				return notabs
-			}),
-		},
-		{
-			Name:   "CompanyName",
-			Prompt: &survey.Input{Message: "Company name", Default: "App Nerds"},
-		},
-		{
-			Name: "Title",
-			Prompt: &survey.Input{
-				Message: "Title",
-				Help:    "This value is used in the browser title and README",
-			},
-		},
-		{
-			Name:   "Description",
-			Prompt: &survey.Input{Message: "Describe this application in a single sentence"},
-		},
-		{
-			Name:   "Email",
-			Prompt: &survey.Input{Message: "Enter your email address"},
-		},
+	if err = questioners.AskBasicQuestions(context); err != nil {
+		exitOnInterrupt(err)
 	}
 
-	if err = survey.Ask(firstQuestions, &values); err != nil {
-		if err == terminal.InterruptErr {
-			fmt.Printf("\nCancelling.\n")
-			os.Exit(-1)
-		}
-
-		logrus.WithError(err).Fatalf("There was an error!")
+	if err = questioners.AskTypeOfAppQuestions(context); err != nil {
+		exitOnInterrupt(err)
 	}
 
-	secondQuestions := []*survey.Question{
-		{
-			Name: "GithubPath",
-			Prompt: &survey.Input{
-				Message: "Enter the Github path for this application's home repo",
-				Help:    "This should be the path to a Github repository. eg. github.com/app-nerds/my-new-app",
-				Suggest: func(toComplete string) []string {
-					return []string{
-						"github.com/app-nerds/" + values.AppName,
-					}
-				},
-			},
-			Validate: survey.Required,
-		},
-		{
-			Name: "EnvPrefix",
-			Prompt: &survey.Input{
-				Message: "Environment variable prefix",
-				Help:    "This prefix will be applied to configuration values pulled from the environment. eg. PREFIX_SERVER_HOST. No spaces allowed.",
-				Suggest: func(toComplete string) []string {
-					upper := strings.ToUpper(values.AppName)
-					nospaces := strings.ReplaceAll(upper, " ", "")
-					notabs := strings.ReplaceAll(nospaces, "\t", "")
-					nohyphens := strings.ReplaceAll(notabs, "-", "_")
-
-					return []string{
-						nohyphens,
-					}
-				},
-			},
-			Transform: survey.TransformString(func(s string) string {
-				upper := strings.ToUpper(s)
-				nospaces := strings.ReplaceAll(upper, " ", "")
-				notabs := strings.ReplaceAll(nospaces, "\t", "")
-
-				return notabs
-			}),
-		},
-		{
-			Name: "GithubToken",
-			Prompt: &survey.Input{
-				Message: "Enter your Github Personal Access Token",
-				Help:    "This is used for accessing private repos in Docker builds. See https://docs.github.com/en/github/authenticating-to-github/keeping-your-account-and-data-secure/creating-a-personal-access-token",
-				Suggest: func(toComplete string) []string {
-					value := os.Getenv("GITHUB_TOKEN")
-
-					if value == "" {
-						return []string{}
-					}
-
-					return []string{
-						value,
-					}
-				},
-			},
-		},
-		{
-			Name:   "WantDatabase",
-			Prompt: &survey.Confirm{Message: "Would you like to use a database?", Default: false},
-		},
-		{
-			Name:   "WantFrontend",
-			Prompt: &survey.Confirm{Message: "Would you like to add a VueJS front-end application?", Default: true},
-		},
+	if err = questioners.AskEnvQuestions(context); err != nil {
+		exitOnInterrupt(err)
 	}
 
-	if err = survey.Ask(secondQuestions, &values); err != nil {
-		if err == terminal.InterruptErr {
-			fmt.Printf("\nCancelling.\n")
-			os.Exit(-1)
-		}
-
-		logrus.WithError(err).Fatalf("There was an error!")
+	if err = questioners.AskDatabaseQuestions(context); err != nil {
+		exitOnInterrupt(err)
 	}
 
-	if values.WantDatabase {
-	databaseQuestions:
+	context.GithubSSHPath = generateSSHURL(context.GithubPath)
 
-		dbQuestions := []*survey.Question{
-			{
-				Name:     "DbHost",
-				Prompt:   &survey.Input{Message: "Database host address", Default: "localhost"},
-				Validate: survey.Required,
-			},
-			{
-				Name: "DbUser",
-				Prompt: &survey.Input{
-					Message: "User name",
-					Suggest: func(toComplete string) []string {
-						return []string{
-							"root",
-						}
-					},
-				},
-				Validate: survey.Required,
-			},
-			{
-				Name: "DbPassword",
-				Prompt: &survey.Password{
-					Message: "Password",
-				},
-				Validate: survey.Required,
-			},
-			{
-				Name: "DbName",
-				Prompt: &survey.Input{
-					Message: "Database name",
-					Suggest: func(toComplete string) []string {
-						return []string{
-							values.AppName,
-						}
-					},
-				},
-				Validate: survey.Required,
-			},
-			{
-				Name: "WantModel",
-				Prompt: &survey.Confirm{
-					Message: "Would you like to generate Go models?",
-					Help:    "Only choose yes if you have an existing database with tables. Choosing yes will read this database and get table names for you to choose from",
-				},
-			},
-		}
+	// Generate!
+	generators.BaseGenerator(context, localFS, rootFs)
 
-		if err = survey.Ask(dbQuestions, &values); err != nil {
-			if err == terminal.InterruptErr {
-				fmt.Printf("\nCancelling.\n")
-				os.Exit(-1)
-			}
+  switch context.WhatTypeOfApp {
+  case typesofapps.EmptyApp:
+    generators.EmptyAppGenerator(context, localFS, rootFs)
+  }
 
-			logrus.WithError(err).Fatalf("There was an error!")
-		}
+	// rootFsMapping := []internal.MappingType{
+	// 	{TemplateName: "main.go.tmpl", OutputName: "main.go"},
+	// 	{TemplateName: "ClientApp.go.tmpl", OutputName: "ClientApp.go", IsFrontend: true},
+	// 	{TemplateName: "Config.go.tmpl", OutputName: "Config.go"},
+	// 	{TemplateName: "docker-compose.yml.tmpl", OutputName: "docker-compose.yml"},
+	// 	{TemplateName: "Dockerfile.tmpl", OutputName: "Dockerfile"},
+	// 	{TemplateName: "go.mod.tmpl", OutputName: "go.mod"},
+	// 	{TemplateName: "Makefile.tmpl", OutputName: "Makefile"},
+	// 	{TemplateName: "VersionController.go.tmpl", OutputName: "VersionController.go"},
+	// 	{TemplateName: "VersionController_test.go.tmpl", OutputName: "VersionController_test.go"},
+	// 	{TemplateName: "editorconfig.tmpl", OutputName: ".editorconfig"},
+	// 	{TemplateName: "gitignore.tmpl", OutputName: ".gitignore"},
+	// 	{TemplateName: "create.sql.tmpl", OutputName: "devops/sql/create.sql", IsDatabase: true},
+	// 	{TemplateName: "env.tmpl", OutputName: ".env"},
+	// 	{TemplateName: "VERSION.tmpl", OutputName: "VERSION"},
+	// 	{TemplateName: "README.md.tmpl", OutputName: "README.md"},
+	// 	{TemplateName: "CHANGELOG.md.tmpl", OutputName: "CHANGELOG.md"},
+	// 	{TemplateName: "go.yml.tmpl", OutputName: ".github/workflows/go.yml"},
+	// }
 
-		if values.WantModel {
-			if tableNames, err = getListOfTables(values); err != nil {
-				fmt.Printf("\nUh oh! There was an error getting a list of tables!\nError: %s\n", err.Error())
-				fmt.Printf("Please try again.\n")
+	// appFsMapping := map[string]string{
+	// 	"browserlistrc.tmpl":       "app/.browserlistrc",
+	// 	"env.tmpl":                 "app/.env",
+	// 	"env.production.tmpl":      "app/.env.production",
+	// 	"eslintrc.js.tmpl":         "app/.eslintrc.js",
+	// 	"gitignore.tmpl":           "app/.gitignore",
+	// 	"prettierrc.tmpl":          "app/.prettierrc",
+	// 	"babel.config.js.tmpl":     "app/babel.config.js",
+	// 	"jest.config.js.tmpl":      "app/jest.config.js",
+	// 	"package.json.tmpl":        "app/package.json",
+	// 	"index.html.tmpl":          "app/public/index.html",
+	// 	"index2.html.tmpl":         "app/dist/index.html",
+	// 	"styles.css.tmpl":          "app/src/assets/css/styles.css",
+	// 	"AppFooter.vue.tmpl":       "app/src/modules/ui/components/AppFooter.vue",
+	// 	"AppHeader.vue.tmpl":       "app/src/modules/ui/components/AppHeader.vue",
+	// 	"Logo.vue.tmpl":            "app/src/modules/ui/components/Logo.vue",
+	// 	"AlertService.js.tmpl":     "app/src/modules/ui/services/AlertService.js",
+	// 	"VersionService.js.tmpl":   "app/src/modules/version/services/VersionService.js",
+	// 	"index.js.tmpl":            "app/src/router/index.js",
+	// 	"Home.vue.tmpl":            "app/src/views/Home.vue",
+	// 	"PageTwo.vue.tmpl":         "app/src/views/PageTwo.vue",
+	// 	"App.vue.tmpl":             "app/src/App.vue",
+	// 	"BaseURL.js.tmpl":          "app/src/BaseURL.js",
+	// 	"HttpInterceptors.js.tmpl": "app/src/HttpInterceptors.js",
+	// 	"main.js.tmpl":             "app/src/main.js",
+	// 	"example.spec.js.tmpl":     "app/tests/unit/example.spec.js",
+	// }
 
-				goto databaseQuestions
-			}
+	// staticFilesMapping := map[string]string{
+	// 	"templates/app/favicon.ico":        "app/public/favicon.ico",
+	// 	"templates/app/app-nerds-logo.jpg": "app/src/assets/images/app-nerds-logo.jpg",
+	// }
 
-			whichTablesPrompt := &survey.MultiSelect{
-				Message: "Which tables should I generate modesl from?",
-				Options: tableNames,
-			}
+	// fmt.Printf("\nCreating your new application!\n")
+	// fmt.Printf("   This might take a couple of minutes... ☕️\n")
+	// fmt.Printf("\n")
 
-			if err = survey.AskOne(whichTablesPrompt, &selectedTables); err != nil {
-				if err == terminal.InterruptErr {
-					fmt.Printf("\nCancelling.\n")
-					os.Exit(-1)
-				}
+	// /*
+	//  * Create directories
+	//  */
+	// if err = localFS.Mkdir(context.AppName, 0755); err != nil {
+	// 	logrus.WithError(err).Errorf("error attempting to create application directory '%s'", context.AppName)
+	// }
 
-				logrus.WithError(err).Fatalf("There was an error!")
-			}
+	// if err = localFS.Chdir(context.AppName); err != nil {
+	// 	logrus.WithError(err).Errorf("error changing to new directory '%s'", context.AppName)
+	// }
 
-			if tables, err = getColumnsForTables(values, selectedTables); err != nil {
-				fmt.Printf("\nUh oh! There was an error getting a list of columns!\nError: %s\n", err.Error())
-				fmt.Printf("Please try again.\n")
+	// subdirs = []string{
+	// 	"docs",
+	// 	".github/workflows",
+	// }
 
-				goto databaseQuestions
-			}
-		}
-	}
+	// if context.WantFrontend {
+	// 	subdirs = append(subdirs,
+	// 		"app",
+	// 		"app/dist/css",
+	// 		"app/dist/js",
+	// 		"app/dist/img",
+	// 		"app/public",
+	// 		"app/src/assets",
+	// 		"app/src/assets/css",
+	// 		"app/src/assets/images",
+	// 		"app/src/modules",
+	// 		"app/src/modules/ui",
+	// 		"app/src/modules/ui/components",
+	// 		"app/src/modules/ui/services",
+	// 		"app/src/modules/version",
+	// 		"app/src/modules/version/services",
+	// 		"app/src/router",
+	// 		"app/src/views",
+	// 		"app/tests/unit",
+	// 	)
+	// }
 
-	values.GithubSSHPath = generateSSHURL(values.GithubPath)
+	// if context.WantDatabase {
+	// 	subdirs = append(subdirs, "devops/sql")
+	// }
 
-	rootFsMapping := []mappingType{
-		{TemplateName: "main.go.tmpl", OutputName: "main.go"},
-		{TemplateName: "ClientApp.go.tmpl", OutputName: "ClientApp.go", IsFrontend: true},
-		{TemplateName: "Config.go.tmpl", OutputName: "Config.go"},
-		{TemplateName: "docker-compose.yml.tmpl", OutputName: "docker-compose.yml"},
-		{TemplateName: "Dockerfile.tmpl", OutputName: "Dockerfile"},
-		{TemplateName: "go.mod.tmpl", OutputName: "go.mod"},
-		{TemplateName: "Makefile.tmpl", OutputName: "Makefile"},
-		{TemplateName: "VersionController.go.tmpl", OutputName: "VersionController.go"},
-		{TemplateName: "VersionController_test.go.tmpl", OutputName: "VersionController_test.go"},
-		{TemplateName: "editorconfig.tmpl", OutputName: ".editorconfig"},
-		{TemplateName: "gitignore.tmpl", OutputName: ".gitignore"},
-		{TemplateName: "create.sql.tmpl", OutputName: "devops/sql/create.sql", IsDatabase: true},
-		{TemplateName: "env.tmpl", OutputName: ".env"},
-		{TemplateName: "VERSION.tmpl", OutputName: "VERSION"},
-		{TemplateName: "README.md.tmpl", OutputName: "README.md"},
-		{TemplateName: "CHANGELOG.md.tmpl", OutputName: "CHANGELOG.md"},
-		{TemplateName: "go.yml.tmpl", OutputName: ".github/workflows/go.yml"},
-	}
+	// for _, dirname := range subdirs {
+	// 	if err = localFS.MkdirAll(dirname, 0755); err != nil {
+	// 		logrus.WithError(err).Fatalf("unable to create subdirectory %s", dirname)
+	// 	}
+	// }
 
-	appFsMapping := map[string]string{
-		"browserlistrc.tmpl":       "app/.browserlistrc",
-		"env.tmpl":                 "app/.env",
-		"env.production.tmpl":      "app/.env.production",
-		"eslintrc.js.tmpl":         "app/.eslintrc.js",
-		"gitignore.tmpl":           "app/.gitignore",
-		"prettierrc.tmpl":          "app/.prettierrc",
-		"babel.config.js.tmpl":     "app/babel.config.js",
-		"jest.config.js.tmpl":      "app/jest.config.js",
-		"package.json.tmpl":        "app/package.json",
-		"index.html.tmpl":          "app/public/index.html",
-		"index2.html.tmpl":         "app/dist/index.html",
-		"styles.css.tmpl":          "app/src/assets/css/styles.css",
-		"AppFooter.vue.tmpl":       "app/src/modules/ui/components/AppFooter.vue",
-		"AppHeader.vue.tmpl":       "app/src/modules/ui/components/AppHeader.vue",
-		"Logo.vue.tmpl":            "app/src/modules/ui/components/Logo.vue",
-		"AlertService.js.tmpl":     "app/src/modules/ui/services/AlertService.js",
-		"VersionService.js.tmpl":   "app/src/modules/version/services/VersionService.js",
-		"index.js.tmpl":            "app/src/router/index.js",
-		"Home.vue.tmpl":            "app/src/views/Home.vue",
-		"PageTwo.vue.tmpl":         "app/src/views/PageTwo.vue",
-		"App.vue.tmpl":             "app/src/App.vue",
-		"BaseURL.js.tmpl":          "app/src/BaseURL.js",
-		"HttpInterceptors.js.tmpl": "app/src/HttpInterceptors.js",
-		"main.js.tmpl":             "app/src/main.js",
-		"example.spec.js.tmpl":     "app/tests/unit/example.spec.js",
-	}
+	// /*
+	//  * Process root filesystem templates
+	//  */
+	// if templates, err = template.ParseFS(rootFs, "templates/*.tmpl"); err != nil {
+	// 	logrus.WithError(err).Fatal("error parsing root templates files")
+	// }
 
-	staticFilesMapping := map[string]string{
-		"templates/app/favicon.ico":        "app/public/favicon.ico",
-		"templates/app/app-nerds-logo.jpg": "app/src/assets/images/app-nerds-logo.jpg",
-	}
+	// for _, mt := range rootFsMapping {
+	// 	if !context.WantFrontend && mt.IsFrontend {
+	// 		continue
+	// 	}
 
-	fmt.Printf("\nCreating your new application!\n")
-	fmt.Printf("   This might take a couple of minutes... ☕️\n")
-	fmt.Printf("\n")
+	// 	if !context.WantDatabase && mt.IsDatabase {
+	// 		continue
+	// 	}
 
-	/*
-	 * Create directories
-	 */
-	if err = os.Mkdir(values.AppName, 0755); err != nil {
-		logrus.WithError(err).Errorf("error attempting to create application directory '%s'", values.AppName)
-	}
+	// 	if fp, err = os.Create(mt.OutputName); err != nil {
+	// 		logrus.WithError(err).Fatalf("unable to create file %s for writing", mt.OutputName)
+	// 	}
 
-	if err = os.Chdir(values.AppName); err != nil {
-		logrus.WithError(err).Errorf("error changing to new directory '%s'", values.AppName)
-	}
+	// 	defer fp.Close()
 
-	subdirs = []string{
-		"docs",
-		".github/workflows",
-	}
+	// 	if err = templates.ExecuteTemplate(fp, mt.TemplateName, context); err != nil {
+	// 		logrus.WithError(err).Fatalf("unable to exeucte template %s", mt.TemplateName)
+	// 	}
+	// }
 
-	if values.WantFrontend {
-		subdirs = append(subdirs,
-			"app",
-			"app/dist/css",
-			"app/dist/js",
-			"app/dist/img",
-			"app/public",
-			"app/src/assets",
-			"app/src/assets/css",
-			"app/src/assets/images",
-			"app/src/modules",
-			"app/src/modules/ui",
-			"app/src/modules/ui/components",
-			"app/src/modules/ui/services",
-			"app/src/modules/version",
-			"app/src/modules/version/services",
-			"app/src/router",
-			"app/src/views",
-			"app/tests/unit",
-		)
-	}
+	// /*
+	//  * Process app filesystem templates
+	//  */
+	// if context.WantFrontend {
+	// 	if templates, err = template.ParseFS(rootFs, "templates/app/*.tmpl"); err != nil {
+	// 		logrus.WithError(err).Fatal("error parsing app template files")
+	// 	}
 
-	if values.WantDatabase {
-		subdirs = append(subdirs, "devops/sql")
-	}
+	// 	for templateName, outputPath := range appFsMapping {
+	// 		if fp, err = localFS.Create(outputPath); err != nil {
+	// 			logrus.WithError(err).Fatalf("unable to create file %s for writing", outputPath)
+	// 		}
 
-	for _, dirname := range subdirs {
-		if err = os.MkdirAll(dirname, 0755); err != nil {
-			logrus.WithError(err).Fatalf("unable to create subdirectory %s", dirname)
-		}
-	}
+	// 		defer fp.Close()
 
-	/*
-	 * Process root filesystem templates
-	 */
-	if templates, err = template.ParseFS(rootFs, "templates/*.tmpl"); err != nil {
-		logrus.WithError(err).Fatal("error parsing root templates files")
-	}
+	// 		if err = templates.ExecuteTemplate(fp, templateName, context); err != nil {
+	// 			logrus.WithError(err).Fatalf("unable to execute template %s", templateName)
+	// 		}
+	// 	}
 
-	for _, mt := range rootFsMapping {
-		if !values.WantFrontend && mt.IsFrontend {
-			continue
-		}
+	// 	/*
+	// 	 * Copy static assets
+	// 	 */
+	// 	for sourceFile, targetFile := range staticFilesMapping {
+	// 		if sourceFp, err = rootFs.Open(sourceFile); err != nil {
+	// 			logrus.WithError(err).Fatalf("unable to read static asset %s", sourceFile)
+	// 		}
 
-		if !values.WantDatabase && mt.IsDatabase {
-			continue
-		}
+	// 		defer sourceFp.Close()
 
-		if fp, err = os.Create(mt.OutputName); err != nil {
-			logrus.WithError(err).Fatalf("unable to create file %s for writing", mt.OutputName)
-		}
+	// 		if fp, err = localFS.Create(targetFile); err != nil {
+	// 			logrus.WithError(err).Fatalf("unable to create file %s for writing", targetFile)
+	// 		}
 
-		defer fp.Close()
+	// 		defer fp.Close()
 
-		if err = templates.ExecuteTemplate(fp, mt.TemplateName, values); err != nil {
-			logrus.WithError(err).Fatalf("unable to exeucte template %s", mt.TemplateName)
-		}
-	}
+	// 		if _, err = io.Copy(fp, sourceFp); err != nil {
+	// 			logrus.WithError(err).Fatalf("error copying static asset %s to %s", sourceFile, targetFile)
+	// 		}
+	// 	}
+	// }
 
-	/*
-	 * Process app filesystem templates
-	 */
-	if values.WantFrontend {
-		if templates, err = template.ParseFS(appFs, "templates/app/*.tmpl"); err != nil {
-			logrus.WithError(err).Fatal("error parsing app template files")
-		}
+	// /*
+	//  * Generate models
+	//  */
+	// if context.WantDatabase && context.WantModel {
+	// 	for _, t := range context.Tables {
+	// 		var modelTemplate string
+	// 		modelFileName := fmt.Sprintf("%s.go", strcase.ToCamel(t.Name))
 
-		for templateName, outputPath := range appFsMapping {
-			if fp, err = os.Create(outputPath); err != nil {
-				logrus.WithError(err).Fatalf("unable to create file %s for writing", outputPath)
-			}
+	// 		if modelTemplate, err = internal.GenerateModelFromTable(t); err != nil {
+	// 			logrus.WithError(err).Fatalf("error generating table model for %s", t.Name)
+	// 		}
 
-			defer fp.Close()
+	// 		if fp, err = localFS.Create(modelFileName); err != nil {
+	// 			logrus.WithError(err).Fatalf("unable to create model file %s", modelFileName)
+	// 		}
 
-			if err = templates.ExecuteTemplate(fp, templateName, values); err != nil {
-				logrus.WithError(err).Fatalf("unable to execute template %s", templateName)
-			}
-		}
+	// 		defer fp.Close()
 
-		/*
-		 * Copy static assets
-		 */
-		for sourceFile, targetFile := range staticFilesMapping {
-			if sourceFp, err = appFs.Open(sourceFile); err != nil {
-				logrus.WithError(err).Fatalf("unable to read static asset %s", sourceFile)
-			}
+	// 		_, _ = fp.WriteString(modelTemplate)
+	// 	}
+	// }
 
-			defer sourceFp.Close()
+	// /*
+	//  * Do the steps the initialze the new app
+	//  */
+	// if context.WantFrontend {
+	// 	if err = npmInstall(localFS); err != nil {
+	// 		logrus.WithError(err).Fatalf("Error installing Node modules")
+	// 	}
 
-			if fp, err = os.Create(targetFile); err != nil {
-				logrus.WithError(err).Fatalf("unable to create file %s for writing", targetFile)
-			}
+	// 	if err = buildNode(localFS); err != nil {
+	// 		logrus.WithError(err).Fatalf("Error building NodeJS app")
+	// 	}
+	// }
 
-			defer fp.Close()
+	// if err = modDownload(); err != nil {
+	// 	logrus.WithError(err).Fatalf("Error downloading Go modules")
+	// }
 
-			if _, err = io.Copy(fp, sourceFp); err != nil {
-				logrus.WithError(err).Fatalf("error copying static asset %s to %s", sourceFile, targetFile)
-			}
-		}
-	}
-
-	/*
-	 * Generate models
-	 */
-	if values.WantDatabase && values.WantModel {
-		for _, t := range tables {
-			var modelTemplate string
-			modelFileName := fmt.Sprintf("%s.go", strcase.ToCamel(t.Name))
-
-			if modelTemplate, err = generateModelFromTable(t); err != nil {
-				logrus.WithError(err).Fatalf("error generating table model for %s", t.Name)
-			}
-
-			if fp, err = os.Create(modelFileName); err != nil {
-				logrus.WithError(err).Fatalf("unable to create model file %s", modelFileName)
-			}
-
-			defer fp.Close()
-
-			_, _ = fp.WriteString(modelTemplate)
-		}
-	}
-
-	/*
-	 * Do the steps the initialze the new app
-	 */
-	if values.WantFrontend {
-		if err = npmInstall(); err != nil {
-			logrus.WithError(err).Fatalf("Error installing Node modules")
-		}
-
-		if err = buildNode(); err != nil {
-			logrus.WithError(err).Fatalf("Error building NodeJS app")
-		}
-	}
-
-	if err = modDownload(); err != nil {
-		logrus.WithError(err).Fatalf("Error downloading Go modules")
-	}
-
-	if err = gitInit(); err != nil {
-		logrus.WithError(err).Fatalf("Error initializing Git repository")
-	}
+	// if err = gitInit(); err != nil {
+	// 	logrus.WithError(err).Fatalf("Error initializing Git repository")
+	// }
 
 	fmt.Printf("\n🎉 Congratulations! Your new application is ready.\n")
 
-	if values.WantDatabase {
+	if context.WantDatabase {
 		fmt.Printf("\n👩‍💻 Since you opted to have a database setup, in a new terminal window run: \n")
 		fmt.Printf("   make start-postgres\n")
 		fmt.Printf("\nThis will start a Postgres database in a Docker container. ")
@@ -562,188 +326,8 @@ func main() {
 	fmt.Printf("Before this works, however, you'll need to setup a secret in your\n")
 	fmt.Printf("repository called ACTIONS_TOKEN. This should contain a Personal\n")
 	fmt.Printf("Access Token that has access to private repositories.\n")
-}
 
-func getListOfTables(values appValues) ([]string, error) {
-	// For future, if I support more DBs, we'll switch here
-	return getListOfTablesPostgres(values)
-}
-
-func getColumnsForTables(values appValues, tableNames []string) ([]tableStruct, error) {
-	// For future, if I support more DBs, we'll switch here
-	return getColumnsForTablesPostgres(values, tableNames)
-}
-
-func getListOfTablesPostgres(values appValues) ([]string, error) {
-	var (
-		err  error
-		db   postgresr.Conn
-		rows pgx.Rows
-
-		tablename string
-	)
-
-	result := make([]string, 0, 15)
-
-	db, err = postgresr.Connect(context.Background(),
-		fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
-			values.DbHost, values.DbUser, values.DbPassword,
-			values.DbName,
-		),
-	)
-
-	if err != nil {
-		return result, err
-	}
-
-	defer db.Close(context.Background())
-
-	sql := `
-		SELECT tablename FROM pg_catalog.pg_tables
-		WHERE schemaname != 'pg_catalog'
-		AND schemaname != 'information_schema'
-	`
-
-	if rows, err = db.Query(context.Background(), sql); err != nil {
-		return result, err
-	}
-
-	for rows.Next() {
-		if err = rows.Scan(&tablename); err != nil {
-			return result, err
-		}
-
-		result = append(result, tablename)
-	}
-
-	return result, err
-}
-
-func getColumnsForTablesPostgres(values appValues, tableNames []string) ([]tableStruct, error) {
-	var (
-		err  error
-		db   postgresr.Conn
-		rows pgx.Rows
-	)
-
-	result := make([]tableStruct, 0, 15)
-
-	db, err = postgresr.Connect(context.Background(),
-		fmt.Sprintf("host=%s user=%s password=%s dbname=%s sslmode=disable",
-			values.DbHost, values.DbUser, values.DbPassword,
-			values.DbName,
-		),
-	)
-
-	if err != nil {
-		return result, err
-	}
-
-	defer db.Close(context.Background())
-
-	for _, tableName := range tableNames {
-		t := tableStruct{
-			Name:    tableName,
-			Columns: make([]tableColumn, 0, 15),
-		}
-
-		sql := `
-			SELECT 
-				column_name, 
-				data_type 
-			FROM 
-				information_schema.columns
-			WHERE 
-				table_name = $1;
-		`
-
-		if rows, err = db.Query(context.Background(), sql, tableName); err != nil {
-			return result, err
-		}
-
-		var columnname string
-		var datatype string
-
-		var actualDataType string
-		var ok bool
-
-		for rows.Next() {
-			if err = rows.Scan(&columnname, &datatype); err != nil {
-				return result, err
-			}
-
-			if actualDataType, ok = postgresDatatypes[datatype]; !ok {
-				actualDataType = "string"
-			}
-
-			c := tableColumn{
-				Name:     columnname,
-				DataType: actualDataType,
-			}
-
-			t.Columns = append(t.Columns, c)
-		}
-
-		result = append(result, t)
-	}
-
-	return result, nil
-}
-
-func generateModelFromTable(table tableStruct) (string, error) {
-	var (
-		err error
-	)
-
-	tmpl := `package main
-{{if .HasTime}}
-import (
-	"time"
-)
-{{end}}
-type {{.Name}} struct {
-	{{range .Columns}}{{.Name}} {{.DataType}} ` + "`json:\"{{.JSONName}}\"`" + `
-	{{end}}
-}
-`
-
-	type tempTableColumn struct {
-		Name     string
-		DataType string
-		JSONName string
-	}
-
-	data := struct {
-		Name    string
-		HasTime bool
-		Columns []tempTableColumn
-	}{
-		Name:    strcase.ToCamel(table.Name),
-		Columns: make([]tempTableColumn, 0, 15),
-	}
-
-	for _, c := range table.Columns {
-		newColumn := tempTableColumn{
-			Name:     strcase.ToCamel(c.Name),
-			DataType: c.DataType,
-			JSONName: strcase.ToLowerCamel(c.Name),
-		}
-
-		if c.DataType == "time.Time" {
-			data.HasTime = true
-		}
-
-		data.Columns = append(data.Columns, newColumn)
-	}
-
-	t := template.Must(template.New(table.Name).Parse(tmpl))
-	b := strings.Builder{}
-
-	if err = t.Execute(&b, data); err != nil {
-		return "", err
-	}
-
-	return b.String(), nil
+	fmt.Printf("\n\n%+v\n\n", context)
 }
 
 func hasSpace(value string) bool {
@@ -782,12 +366,12 @@ func modDownload() error {
 	return err
 }
 
-func npmInstall() error {
+func npmInstall(localFS filesystem.FileSystem) error {
 	var (
 		err error
 	)
 
-	if err = os.Chdir("app"); err != nil {
+	if err = localFS.Chdir("app"); err != nil {
 		return errors.New("error changing to app directory in npmInstall()")
 	}
 
@@ -798,19 +382,19 @@ func npmInstall() error {
 		return err
 	}
 
-	if err = os.Chdir(".."); err != nil {
+	if err = localFS.Chdir(".."); err != nil {
 		return errors.New("error changing back to project root directory in npmInstall()")
 	}
 
 	return nil
 }
 
-func buildNode() error {
+func buildNode(localFS filesystem.FileSystem) error {
 	var (
 		err error
 	)
 
-	if err = os.Chdir("app"); err != nil {
+	if err = localFS.Chdir("app"); err != nil {
 		return errors.New("error changing to app directory in buildNode()")
 	}
 
@@ -821,7 +405,7 @@ func buildNode() error {
 		return err
 	}
 
-	if err = os.Chdir(".."); err != nil {
+	if err = localFS.Chdir(".."); err != nil {
 		return errors.New("error changing back to project root directory in buildNode()")
 	}
 
@@ -838,4 +422,15 @@ func gitInit() error {
 
 	err = cmd.Run()
 	return err
+}
+
+func exitOnInterrupt(err error) {
+	if errors.Is(err, questioners.ErrInterrupted) {
+		fmt.Printf("\nCancelling.\n")
+		os.Exit(-1)
+	}
+
+	fmt.Printf("\nThere was an unexpected error.\n")
+	fmt.Printf("   %s\n", err.Error())
+	os.Exit(-1)
 }

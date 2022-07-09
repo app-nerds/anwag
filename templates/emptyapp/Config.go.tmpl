@@ -1,0 +1,37 @@
+package configuration
+
+import (
+	"github.com/app-nerds/configinator"
+	"github.com/sirupsen/logrus"
+)
+
+type Config struct {
+	AppName string
+	Version string
+
+	LogLevel string `flag:"loglevel" env:"LOG_LEVEL" default:"info" description:"Minimum log level to report"`
+}
+
+func NewConfig(appName, version string) *Config {
+	result := Config{}
+	configinator.Behold(&result)
+
+	result.AppName = appName
+	result.Version = version
+
+	return &result
+}
+
+func (c *Config) GetLogLevel() logrus.Level {
+	var (
+		err      error
+		loglevel logrus.Level
+	)
+
+	if loglevel, err = logrus.ParseLevel(c.LogLevel); err != nil {
+		panic("invalid log level '" + c.LogLevel + "'")
+	}
+
+	return loglevel
+}
+

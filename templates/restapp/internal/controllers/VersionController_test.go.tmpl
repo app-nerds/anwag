@@ -1,0 +1,57 @@
+/*
+ * Copyright © {{.Year}}. {{.CompanyName}} All Rights Reserved
+ */
+
+package controllers_test
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+
+	"{{.GithubPath}}/internal/controllers"
+	"{{.GithubPath}}/internal/testhelpers"
+)
+
+func TestVersionControllerGetVersion(t *testing.T) {
+	config := testhelpers.NewConfig()
+	logger := testhelpers.NewLogger()
+
+	tests := []struct {
+		name           string
+		expectedStatus int
+		expectedBody   string
+	}{
+		{
+			name:           "Returns the server veresion",
+			expectedStatus: http.StatusOK,
+			expectedBody:   `{"version":"version"}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			request := httptest.NewRequest("GET", "/version", nil)
+			request.Header.Set("Content-Type", "application/json")
+
+			recorder := httptest.NewRecorder()
+
+			c := controllers.VersionHandlers{
+				Config: config,
+				Logger: logger,
+			}
+
+			c.GetVersion(recorder, request)
+
+			if recorder.Code != tt.expectedStatus {
+				t.Errorf("GetVersion() want %d, got %d", tt.expectedStatus, recorder.Code)
+			}
+
+			if !strings.EqualFold(strings.TrimSpace(recorder.Body.String()), tt.expectedBody) {
+				t.Errorf("GetVersion()\nwant %s\ngot%s", tt.expectedBody, recorder.Body.String())
+			}
+		})
+	}
+}
+

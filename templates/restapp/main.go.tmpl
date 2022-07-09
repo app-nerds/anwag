@@ -1,0 +1,180 @@
+/*
+ * Copyright © {{.Year}}. {{.CompanyName}} All Rights Reserved
+ */
+
+package main
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"{{.GithubPath}}/internal/configuration"
+	"{{.GithubPath}}/internal/controllers"
+	"github.com/app-nerds/nerdweb"
+	"github.com/app-nerds/nerdweb/middlewares"
+	{{if .WantDatabase}}
+	"github.com/jackc/pgx/v4"{{end}}
+	"github.com/sirupsen/logrus"
+)
+
+/*
+ * These constants are used for environment configuration and
+ * logging setup.
+ */
+const (
+	AppName   string = "{{.AppName}}"
+	EnvPrefix string = "{{.EnvPrefix}}"{{if .WantDatabase}}
+	
+	DefaultDBHost            string = "{{.DbHost}}"
+	DefaultDBUser            string = "{{.DbUser}}"
+	DefaultDBPassword        string = "{{.DbPassword}}"
+	DefaultDBName            string = "{{.DbName}}"
+	MaxDBConnectionAttempts  int    = 5{{end}}
+)
+
+var (
+	Version = "development"
+
+	config configuration.Config
+	logger *logrus.Entry
+	server *http.Server{{if .WantDatabase}}
+	db     *pgx.Conn{{end}}
+
+	// Services
+
+	// Controllers
+	versionController controllers.VersionController
+)
+
+func main() {
+	/*
+	 * Setup configuration, logging, and database connection
+	 */
+	setupConfigAndLogging(){{if .WantDatabase}}
+	connectToDatabase()
+	defer db.Close(context.Background()){{end}}
+
+	/*
+	 * Setup components
+	 */
+	setupServices()
+	setupControllers()
+
+	/*
+	 * Setup handlers and start server
+	 */
+	mux := nerdweb.NewServeMux()
+	
+	mux.HandleFunc("/version", middlewares.Allow(versionController.GetVersion, http.MethodGet))
+
+	// Middlewares
+	mux.Use(
+		middlewares.RequestLogger(logger),
+		middlewares.AccessControl(middlewares.AllowAllOrigins, middlewares.AllowAllMethods, middlewares.AllowAllHeaders),
+		middlewares.CaptureIP(),
+	)
+
+	startServer(mux)
+
+	/*
+	 * Wait for a kill signal
+	 */
+	quit := make(chan os.Signal)
+	signal.Notify(quit, os.Interrupt, syscall.SIGQUIT, syscall.SIGTERM)
+	<-quit
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	server.Shutdown(ctx)
+	logger.Info("application stopped")
+}
+
+/*
+setupServices is where you setup service components.
+*/
+func setupServices() {
+}
+
+/*
+setupControllers is where you should initialize controller components.
+*/
+func setupControllers() {
+	versionController = controllers.VersionHandlers{Config: config, Logger: logger}
+}
+
+func setupConfigAndLogging() {
+	config = configuration.NewConfig(Version, EnvPrefix, DefaultDBUser, DefaultDBPassword, DefaultDBHost, DefaultDBName)
+	logger = logrus.New().WithField("who", AppName)
+	logger.Logger.SetLevel(config.ServerLogLevel)
+}
+{{if .WantDatabase}}
+func connectToDatabase() {
+	var err error
+	connectionTries := 0
+	connectionWaitTime := 5
+
+connectToDB:
+
+	if db, err = pgx.Connect(context.Background(), config.DatabaseURL); err != nil {
+		logger.WithError(err).Errorf("unable to connect to database. will attempt again in %ds", connectionWaitTime)
+
+		if connectionTries < MaxDBConnectionAttempts {
+			connectionTries++
+			time.Sleep(time.Duration(connectionWaitTime) * time.Second)
+
+			connectionWaitTime += 5
+			goto connectToDB
+		}
+
+		logger.Fatalf("unable to connect to database after %d tries", connectionTries)
+	}
+}
+{{end}}
+/*
+startServer starts the HTTP server. If a certificate file is specified
+in the configuration the server is started with TLS.
+*/
+func startServer(mux http.Handler) {
+	server = &http.Server{
+		Addr:    config.ServerHost,
+		Handler: mux,
+	}
+
+	go func() {
+		var err error
+
+		logger.WithFields(logrus.Fields{
+			"host":          config.ServerHost,
+			"serverVersion": config.Version,
+			"logLevel":      config.ServerLogLevel,
+			"cert":          config.ServerCert,
+		}).Info("starting server...")
+
+		if config.ServerCert != "" {
+			err = server.ListenAndServeTLS(fmt.Sprintf("%s.pem", config.ServerCert), fmt.Sprintf("%s.key", config.ServerCert))
+		} else {
+			err = server.ListenAndServe()
+		}
+
+		if err != http.ErrServerClosed {
+			logger.WithError(err).Fatal("unable to start application. shutting down")
+		} else {
+			logger.Info("shutting down...")
+		}
+	}()
+}
+
+func onInvalidHeader(logger *logrus.Entry, w http.ResponseWriter) {
+	result := map[string]string{
+		"error": "invalid JWT header!",
+	}
+
+	nerdweb.WriteJSON(logger, w, http.StatusBadRequest, result)
+}
+

@@ -1,0 +1,40 @@
+/*
+ * Copyright © {{.Year}}. App Nerds LLC All Rights Reserved
+ */
+
+package main
+
+import (
+  "{{.GithubPath}}/cmd/{{.AppName}}/internal/configuration"
+	"github.com/sirupsen/logrus"
+)
+
+/*
+ * These constants are used for environment configuration and
+ * logging setup.
+ */
+const (
+	AppName   string = "{{.AppName}}"
+)
+
+var (
+	Version = "development"
+
+	config *configuration.Config
+	logger *logrus.Entry
+)
+
+func main() {
+	/*
+	 * Setup configuration and logging
+	 */
+	config = configuration.NewConfig(AppName, Version)
+	logger = logrus.New().WithFields(logrus.Fields{
+    "who": AppName,
+    "version": Version,
+  })
+	logger.Logger.SetLevel(config.GetLogLevel())
+
+	logger.Info("Hello world!")
+}
+
