@@ -27,8 +27,13 @@ var (
 	Version string = "development"
 
 	//go:embed templates/base/*.tmpl
+	baseFs embed.FS
+
 	//go:embed templates/emptyapp/*.tmpl
-	rootFs embed.FS
+	emptyAppFs embed.FS
+
+	//go:embed templates/apiapp/*.tmpl
+	apiAppFs embed.FS
 )
 
 func main() {
@@ -81,12 +86,15 @@ func main() {
 	context.GithubSSHPath = generateSSHURL(context.GithubPath)
 
 	// Generate!
-	generators.BaseGenerator(context, localFS, rootFs)
+	generators.BaseGenerator(context, localFS, baseFs)
 
-  switch context.WhatTypeOfApp {
-  case typesofapps.EmptyApp:
-    generators.EmptyAppGenerator(context, localFS, rootFs)
-  }
+	switch context.WhatTypeOfApp {
+	case typesofapps.EmptyApp:
+		generators.EmptyAppGenerator(context, localFS, emptyAppFs)
+
+	case typesofapps.ApiApp:
+		generators.ApiAppGenerator(context, localFS, apiAppFs)
+	}
 
 	// rootFsMapping := []internal.MappingType{
 	// 	{TemplateName: "main.go.tmpl", OutputName: "main.go"},

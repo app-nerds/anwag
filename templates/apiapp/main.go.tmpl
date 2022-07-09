@@ -7,9 +7,6 @@ package main
 import (
   "{{.GithubPath}}/cmd/{{.AppName}}/internal/configuration"
 	"github.com/sirupsen/logrus"
-  {{- if .WantDatabase}}
-  {{.DBInclude}}
-  {{- end}}
 )
 
 /*
@@ -28,18 +25,6 @@ var (
 )
 
 func main() {
-  {{- if .WantDatabase}}
-  var (
-    err error
-    {{- if eq .WhatTypeOfDatabase "MongoDB"}}
-    session database.Session
-    db database.Database
-    {{- else}}
-    db *gorm.DB
-    {{- end}}
-  )
-
-  {{- end}}
 	/*
 	 * Setup configuration and logging
 	 */
@@ -49,12 +34,6 @@ func main() {
     "version": Version,
   })
 	logger.Logger.SetLevel(config.GetLogLevel())
-  {{- if .WantDatabase}}
-
-  {{.DBConnectionCode}}
-
-  logger.WithField("db", db).Debug("database")
-  {{- end}}
 
 	logger.Info("Hello world!")
 }

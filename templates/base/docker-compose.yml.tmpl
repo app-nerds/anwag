@@ -8,25 +8,58 @@ services:
       dockerfile: Dockerfile
       args:
         GITHUB_TOKEN: ${GITHUB_TOKEN}
-   {{- if .WantDatabase}}depends_on:
-     - postgres{{end}}
+{{- if .WantDatabase}}
+    depends_on:
+{{- if eq .WhatTypeOfDatabase "MongoDB"}}
+      - mongodb{{end}}
+{{- if eq .WhatTypeOfDatabase "MySQL"}}
+      - mysql{{end}}
+{{- if eq .WhatTypeOfDatabase "Postgres"}}
+      - postgres{{end}}
+{{- end}}
     ports:
       - '8080:8080'
     env_file:
       - ./.env
 {{- if .WantDatabase}}
-
+{{- if eq .WhatTypeOfDatabase "MongoDB"}}
+  mongodb:
+    image: mongo:4.4
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    volumes:
+      - mongodb:/data/db
+    ports:
+      - "${MONGODB_PORT:-27017}:27017"{{end}}
+{{- if eq .WhatTypeOfDatabase "MySQL"}}
+  mysql:
+    image: mysql:8
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    volumes:
+      - mysql:/var/lib/mysql
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"{{end}}
+{{- if eq .WhatTypeOfDatabase "Postgres"}}
   postgres:
-    image: postgres:13-alpine
+    image: postgres:14-alpine
     restart: unless-stopped
     env_file:
       - ./.env
     volumes:
       - postgres:/data/postgres
-      - ./devops/sql/create.sql:/docker-entrypoint-initdb.d/create.sql
     ports:
       - "${POSTGRES_PORT:-5432}:5432"{{end}}
+{{end}}
 
-{{- if .WantDatabase}}volumes:
+{{- if .WantDatabase}}
+volumes:
+{{- if eq .WhatTypeOfDatabase "MongoDB"}}
+  mongodb:{{end}}
+{{- if eq .WhatTypeOfDatabase "MySQL"}}
+  mysql:{{end}}
+{{- if eq .WhatTypeOfDatabase "Postgres"}}
   postgres:{{end}}
-
+{{end}}

@@ -1,4 +1,4 @@
-FROM golang:1.16 as builder
+FROM golang:1.18 as builder
 
 ARG GITHUB_TOKEN
 
@@ -21,11 +21,6 @@ RUN GOPRIVATE="github.com/app-nerds/*" GONOPROXY="github.com/app-nerds/*" go mod
 #
 COPY . .
 RUN make build-linux
-
-#
-# Restore Git back to normal
-#
-RUN git config --global --unset url."https://${GITHUB_TOKEN}@github.com/".insteadOf
 
 #
 # Build the final image

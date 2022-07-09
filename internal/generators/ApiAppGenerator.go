@@ -12,7 +12,7 @@ import (
 	"github.com/app-nerds/kit/v6/filesystem"
 )
 
-func EmptyAppGenerator(context *answercontext.Context, localFS filesystem.FileSystem, templateFS fs.FS) {
+func ApiAppGenerator(context *answercontext.Context, localFS filesystem.FileSystem, templateFS fs.FS) {
 	dirs := []string{
 		fmt.Sprintf("%s/cmd/%s/internal/configuration", context.AppName, context.AppName),
 	}

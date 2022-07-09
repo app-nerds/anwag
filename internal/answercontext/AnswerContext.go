@@ -1,7 +1,7 @@
 package answercontext
 
 import (
-  "time"
+	"time"
 )
 
 /*
@@ -11,28 +11,28 @@ Most of the values come from user input.
 type Context struct {
 	Year string
 
-  // Basic Questions
-	AppName       string
-	Title         string
-	Description   string
-	Email         string
+	// Basic Questions
+	AppName     string
+	Title       string
+	Description string
+	Email       string
 
-  // Type of App Questions
-  WhatTypeOfApp string
+	// Type of App Questions
+	WhatTypeOfApp string
 	WantDatabase  bool
 
-  // Environment Questions
-	GithubPath    string
-	GithubToken   string
-	EnvPrefix     string
-	WantFrontend  bool
+	// Environment Questions
+	GithubPath   string
+	GithubToken  string
+	EnvPrefix    string
+	WantFrontend bool
 
-  // Database Questions
-  WhatTypeOfDatabase string
-	DbHost             string
-	DbUser             string
-	DbPassword         string
+	// Database Questions
+	WhatTypeOfDatabase string
 	DbName             string
+	DSN                string
+	DBInclude          string
+	DBConnectionCode   string
 
 	GithubSSHPath string
 }
