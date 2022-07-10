@@ -1,0 +1,24 @@
+package graph
+
+import (
+  "{{.GithubPath}}/cmd/{{.AppName}}/internal/configuration"
+  {{- if .WantDatabase}}
+  {{.DBInclude}}
+  {{- end}}
+)
+
+// This file will not be regenerated automatically.
+//
+// It serves as dependency injection for your app, add any dependencies you require here.
+
+type Resolver struct {
+{{- if .WantDatabase}}
+{{- if eq .WhatTypeOfDatabase "MongoDB"}}
+  DB     database.Database
+{{- else}}
+  DB     *gorm.DB
+{{- end}}
+{{- end}}
+	Config *configuration.Config
+}
+

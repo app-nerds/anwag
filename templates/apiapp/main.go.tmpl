@@ -5,8 +5,20 @@
 package main
 
 import (
+  "context"
+  "net/http"
+  "time"
+
+	"github.com/99designs/gqlgen/graphql/handler"
+  "github.com/app-nerds/nerdweb/v2"
+	"{{.GithubPath}}/cmd/{{.AppName}}/graph"
+	"{{.GithubPath}}/cmd/{{.AppName}}/graph/generated"
   "{{.GithubPath}}/cmd/{{.AppName}}/internal/configuration"
+  "{{.GithubPath}}/cmd/{{.AppName}}/internal/handlers"
 	"github.com/sirupsen/logrus"
+  {{- if .WantDatabase}}
+  {{.DBInclude}}
+  {{- end}}
 )
 
 /*
@@ -25,6 +37,18 @@ var (
 )
 
 func main() {
+  var (
+    err error
+{{- if .WantDatabase}}
+    {{- if eq .WhatTypeOfDatabase "MongoDB"}}
+    session database.Session
+    db database.Database
+    {{- else}}
+    db *gorm.DB
+{{- end}}
+{{- end}}
+  )
+
 	/*
 	 * Setup configuration and logging
 	 */
@@ -34,7 +58,49 @@ func main() {
     "version": Version,
   })
 	logger.Logger.SetLevel(config.GetLogLevel())
+  {{- if .WantDatabase}}
 
-	logger.Info("Hello world!")
+  {{.DBConnectionCode}}
+
+  {{- end}}
+
+	logger.Info("starting server...")
+  restConfig := nerdweb.DefaultRESTConfig(config.ServerHost)
+
+	graphQLServer := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: &graph.Resolver{
+{{- if .WantDatabase}}
+    DB:     db,
+{{- end}}
+		Config: config,
+	}}))
+
+  restConfig.Endpoints = nerdweb.Endpoints{
+    {Path: "/version", Methods: []string{http.MethodGet}, HandlerFunc: handlers.VersionHandler(config, logger)},
+		{Path: "/query", Methods: []string{http.MethodPost}, Handler: graphQLServer},
+  }
+
+  _, server := nerdweb.NewRESTRouterAndServer(restConfig)
+
+  /*
+   * Start the server
+   */
+  go func() {
+    err := server.ListenAndServe()
+
+    if err != nil && err != http.ErrServerClosed {
+      logger.WithError(err).Fatal("error starting server")
+    }
+  }()
+
+  <-nerdweb.WaitForKill()
+
+  ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+  defer cancel()
+
+  if err = server.Shutdown(ctx); err != nil {
+    logger.WithError(err).Fatal("error shutting down server")
+  }
+
+	logger.Info("server stopped")
 }
 
