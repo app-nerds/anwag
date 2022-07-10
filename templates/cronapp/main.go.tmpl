@@ -1,0 +1,92 @@
+/*
+ * Copyright © {{.Year}}. App Nerds LLC All Rights Reserved
+ */
+
+package main
+
+import (
+  "os"
+  "os/signal"
+  "syscall"
+
+  "{{.GithubPath}}/cmd/{{.AppName}}/internal/configuration"
+	"github.com/sirupsen/logrus"
+	"github.com/robfig/cron/v3"
+  {{- if .WantDatabase}}
+  {{.DBInclude}}
+  {{- end}}
+)
+
+/*
+ * These constants are used for environment configuration and
+ * logging setup.
+ */
+const (
+	AppName   string = "{{.AppName}}"
+)
+
+var (
+	Version = "development"
+
+	config *configuration.Config
+	logger *logrus.Entry
+)
+
+func main() {
+  var (
+    err error
+  {{- if .WantDatabase}}
+    {{- if eq .WhatTypeOfDatabase "MongoDB"}}
+    session database.Session
+    db database.Database
+    {{- else}}
+    db *gorm.DB
+    {{- end}}
+  {{- end}}
+  )
+
+	/*
+	 * Setup configuration and logging
+	 */
+	config = configuration.NewConfig(AppName, Version)
+	logger = logrus.New().WithFields(logrus.Fields{
+    "who": AppName,
+    "version": Version,
+  })
+	logger.Logger.SetLevel(config.GetLogLevel())
+  {{- if .WantDatabase}}
+
+  {{.DBConnectionCode}}
+
+  logger.WithField("db", db).Debug("database")
+  {{- end}}
+
+  cronRunner := cron.New()
+  _, err = cronRunner.AddFunc(config.Schedule, func() {
+    logger.Info("CRON tick")
+  })
+
+  if err != nil {
+      logger.WithError(err).Fatal("error setting up CRON function")
+  }
+
+  quit := make(chan os.Signal, 1)
+  signal.Notify(quit, os.Interrupt, syscall.SIGQUIT, syscall.SIGTERM)
+
+  /*
+   * Start the CRON job
+   */
+  logger.WithFields(logrus.Fields{
+      "schedule": config.Schedule,
+  }).Info("starting scheduler")
+
+  cronRunner.Start()
+  <-quit
+
+  logger.Info("stopping scheduler...")
+  stopCtx := cronRunner.Stop()
+
+  <-stopCtx.Done()
+  logger.Info("application stopped")
+}
+

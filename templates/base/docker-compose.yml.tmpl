@@ -21,6 +21,7 @@ services:
       - '8080:8080'
     env_file:
       - ./.env
+      - ./cmd/{{.AppName}}/.env
 {{- if .WantDatabase}}
 {{- if eq .WhatTypeOfDatabase "MongoDB"}}
   mongodb:

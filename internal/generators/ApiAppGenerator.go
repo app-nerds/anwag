@@ -22,6 +22,8 @@ func ApiAppGenerator(context *answercontext.Context, localFS filesystem.FileSyst
 
 	mapping := []mappings.MappingType{
 		{TemplateName: "main.go.tmpl", OutputName: filepath.Join("cmd", context.AppName, "main.go")},
+		{TemplateName: "env.tmpl", OutputName: filepath.Join("cmd", context.AppName, ".env")},
+		{TemplateName: "env.tmpl", OutputName: filepath.Join("cmd", context.AppName, "env.template")},
 		{TemplateName: "Config.go.tmpl", OutputName: filepath.Join("cmd", context.AppName, "internal", "configuration", "Config.go")},
 		{TemplateName: "go.mod.tmpl", OutputName: "go.mod"},
 		{TemplateName: "VersionHandler.go.tmpl", OutputName: filepath.Join("cmd", context.AppName, "internal", "handlers", "VersionHandler.go")},

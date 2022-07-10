@@ -12,7 +12,7 @@ import (
 	"github.com/app-nerds/kit/v6/filesystem"
 )
 
-func EmptyAppGenerator(context *answercontext.Context, localFS filesystem.FileSystem, templateFS fs.FS) {
+func CronAppGenerator(context *answercontext.Context, localFS filesystem.FileSystem, templateFS fs.FS) {
 	dirs := []string{
 		fmt.Sprintf("%s/cmd/%s/internal/configuration", context.AppName, context.AppName),
 	}
@@ -26,5 +26,5 @@ func EmptyAppGenerator(context *answercontext.Context, localFS filesystem.FileSy
 	}
 
 	dir.MakeDirs(localFS, dirs)
-	templates.Execute(localFS, templateFS, "templates/emptyapp/*.tmpl", mapping, context)
+	templates.Execute(localFS, templateFS, "templates/cronapp/*.tmpl", mapping, context)
 }

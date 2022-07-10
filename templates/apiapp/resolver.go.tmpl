@@ -2,9 +2,13 @@ package graph
 
 import (
   "{{.GithubPath}}/cmd/{{.AppName}}/internal/configuration"
-  {{- if .WantDatabase}}
+{{- if .WantDatabase}}
+{{- if eq .WhatTypeOfDatabase "MongoDB"}}
   {{.DBInclude}}
-  {{- end}}
+{{- else}}
+  "gorm.io/gorm"
+{{- end}}
+{{- end}}
 )
 
 // This file will not be regenerated automatically.

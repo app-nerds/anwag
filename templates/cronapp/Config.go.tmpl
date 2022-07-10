@@ -1,0 +1,48 @@
+package configuration
+
+import (
+	"github.com/app-nerds/configinator"
+	"github.com/robfig/cron/v3"
+  "github.com/sirupsen/logrus"
+)
+
+type Config struct {
+	AppName string
+	Version string
+
+  {{- if .WantDatabase}}
+  DSN      string `flag:"dsn" env:"DSN" default:"{{.DSN}}" description:"DSN string to connect to a database"`
+  {{- end}}
+	LogLevel string `flag:"loglevel" env:"LOG_LEVEL" default:"info" description:"Minimum log level to report"`
+  Schedule string `flag:"schedule" env:"SCHEDULE" default:"" description:"CRON schedule"` 
+}
+
+func NewConfig(appName, version string) *Config {
+	result := Config{}
+	configinator.Behold(&result)
+
+	result.AppName = appName
+	result.Version = version
+
+  cronParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+
+  if _, err := cronParser.Parse(result.Schedule); err != nil {
+    panic("invalid cron schedule '" + result.Schedule + "'")
+  }
+
+  return &result
+}
+
+func (c *Config) GetLogLevel() logrus.Level {
+	var (
+		err      error
+		loglevel logrus.Level
+	)
+
+	if loglevel, err = logrus.ParseLevel(c.LogLevel); err != nil {
+		panic("invalid log level '" + c.LogLevel + "'")
+	}
+
+	return loglevel
+}
+

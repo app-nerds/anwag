@@ -34,6 +34,9 @@ var (
 
 	//go:embed templates/apiapp/*.tmpl
 	apiAppFs embed.FS
+
+	//go:embed templates/cronapp/*.tmpl
+	cronAppFs embed.FS
 )
 
 func main() {
@@ -89,11 +92,14 @@ func main() {
 	generators.BaseGenerator(context, localFS, baseFs)
 
 	switch context.WhatTypeOfApp {
-	case typesofapps.EmptyApp:
-		generators.EmptyAppGenerator(context, localFS, emptyAppFs)
-
 	case typesofapps.ApiApp:
 		generators.ApiAppGenerator(context, localFS, apiAppFs)
+
+	case typesofapps.CronApp:
+		generators.CronAppGenerator(context, localFS, cronAppFs)
+
+	default:
+		generators.EmptyAppGenerator(context, localFS, emptyAppFs)
 	}
 
 	// rootFsMapping := []internal.MappingType{
