@@ -2,6 +2,10 @@
 
 All notable changes will be docmented here.
 
+## 2.0.1
+
+* Fixed readme issue
+
 ## 2.0.0
 
 * Complete rewrite of the application. Now with less questions!
