@@ -10,14 +10,9 @@ This repository houses the {{.Title}} application. {{.Description}}
 
 To run this project a set of environment variables need to be set in your .env file. 
 
-* `{{.EnvPrefix}}_SERVER_HOST` - Default value == `0.0.0.0:8080`
-* `{{.EnvPrefix}}_SERVER_LOGLEVEL` - Default value == `debug`
-* `{{.EnvPrefix}}_SERVER_CERT` - Default value is empty for no SSL cert
-{{if .WantDatabase}}* `{{.EnvPrefix}}_DATABASE_URL` - Set this to a URL with the following format: `postgres://user:password@host/dbname`
-* `POSTGRES_DB` - Provide database name here
-* `POSTGRES_PORT` - Provide database port here. Default value == `5432`
-* `POSTGRES_USER` - Provide database user name here
-* `POSTGRES_PASSWORD` - Provide database user password
+* `SERVER_HOST` - Default value == `0.0.0.0:8080`
+* `LOGLEVEL` - Default value == `debug`
+{{if .WantDatabase}}* `DSN` - Set this to a DSN suitable for the database tech chosen
 * `GITHUB_TOKEN` - Provide a Github Personal Access token which has access to your private repositories{{end}}
 
 ## Run Locally

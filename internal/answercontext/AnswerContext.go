@@ -22,10 +22,9 @@ type Context struct {
 	WantDatabase  bool
 
 	// Environment Questions
-	GithubPath   string
-	GithubToken  string
-	EnvPrefix    string
-	WantFrontend bool
+	GithubPath  string
+	GithubToken string
+	EnvPrefix   string
 
 	// Database Questions
 	WhatTypeOfDatabase string

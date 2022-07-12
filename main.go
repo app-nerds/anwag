@@ -4,22 +4,16 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	// "io"
-	// "io/fs"
 	"os"
 	"os/exec"
 	"strings"
-	// "text/template"
 
-	// "github.com/app-nerds/anwag/internal"
 	"github.com/app-nerds/anwag/internal/answercontext"
 	"github.com/app-nerds/anwag/internal/generators"
 	"github.com/app-nerds/anwag/internal/questioners"
 	"github.com/app-nerds/anwag/internal/typesofapps"
 	"github.com/app-nerds/kit/v6/filesystem"
 	"github.com/app-nerds/kit/v6/filesystem/localfs"
-	// "github.com/iancoleman/strcase"
-	// "github.com/sirupsen/logrus"
 )
 
 var (
@@ -77,7 +71,9 @@ func main() {
 
 	context.GithubSSHPath = generateSSHURL(context.GithubPath)
 
-	// Generate!
+	/*
+	 * Generate
+	 */
 	generators.BaseGenerator(context, localFS, baseFs)
 
 	switch context.WhatTypeOfApp {
@@ -94,50 +90,26 @@ func main() {
 		generators.EmptyAppGenerator(context, localFS, emptyAppFs)
 	}
 
-	// /*
-	//  * Do the steps the initialze the new app
-	//  */
-	// if context.WantFrontend {
-	// 	if err = npmInstall(localFS); err != nil {
-	// 		logrus.WithError(err).Fatalf("Error installing Node modules")
-	// 	}
-
-	// 	if err = buildNode(localFS); err != nil {
-	// 		logrus.WithError(err).Fatalf("Error building NodeJS app")
-	// 	}
-	// }
-
-	// if err = modDownload(); err != nil {
-	// 	logrus.WithError(err).Fatalf("Error downloading Go modules")
-	// }
-
-	// if err = gitInit(); err != nil {
-	// 	logrus.WithError(err).Fatalf("Error initializing Git repository")
-	// }
+	/*
+	 * Do the steps the initialze the new app
+	 */
+	if err = makeSetup(localFS, context); err != nil {
+		fmt.Printf("Unexpected error: %s\n\n", err.Error())
+		os.Exit(-1)
+	}
 
 	fmt.Printf("\n🎉 Congratulations! Your new application is ready.\n")
 
 	if context.WantDatabase {
 		fmt.Printf("\n👩‍💻 Since you opted to have a database setup, in a new terminal window run: \n")
-		fmt.Printf("   make start-postgres\n")
-		fmt.Printf("\nThis will start a Postgres database in a Docker container. ")
-		fmt.Printf("Now, in your first terminal window, run the following to start the app:\n")
+		fmt.Printf("   make start-database\n")
+		fmt.Printf("\nThis will start database server in a Docker container.\n")
 	}
 
+	fmt.Printf("\nGo ahead and run your application by executing the following:\n")
 	fmt.Printf("   make run\n\n")
 
-	fmt.Printf("\n")
-	fmt.Printf("☁ Please note that this project is also setup to use Github Actions.\n")
-	fmt.Printf("Anytime a tag in the format of 'v*.*.*' is pushed to origin\n")
-	fmt.Printf("the code is built and a Release is created. Ensure you update\n")
-	fmt.Printf("the VERSION and CHANGELOG.md files before pushing a tag.\n")
-
-	fmt.Printf("\n")
-	fmt.Printf("Before this works, however, you'll need to setup a secret in your\n")
-	fmt.Printf("repository called ACTIONS_TOKEN. This should contain a Personal\n")
-	fmt.Printf("Access Token that has access to private repositories.\n")
-
-	fmt.Printf("\n\n%+v\n\n", context)
+	os.Chdir(context.AppName)
 }
 
 func hasSpace(value string) bool {
@@ -158,80 +130,22 @@ func generateSSHURL(githubPath string) string {
 	return fmt.Sprintf("git@%s:%s/%s.git", split[0], split[1], split[2])
 }
 
-func modDownload() error {
-	var (
-		err error
-	)
+func makeSetup(localFS filesystem.FileSystem, context *answercontext.Context) error {
+	var err error
 
-	fmt.Printf("Downloading Go modules...\n")
-	cmd := exec.Command("go", "mod", "download")
+	fmt.Printf("Initializing application...\n")
+
+	if err = localFS.Chdir(context.AppName); err != nil {
+		return fmt.Errorf("error changing directory to %s: %w", context.AppName, err)
+	}
+
+	cmd := exec.Command("make", "setup")
 
 	if err = cmd.Run(); err != nil {
-		return err
-	}
-
-	cmd = exec.Command("go", "get")
-	err = cmd.Run()
-
-	return err
-}
-
-func npmInstall(localFS filesystem.FileSystem) error {
-	var (
-		err error
-	)
-
-	if err = localFS.Chdir("app"); err != nil {
-		return errors.New("error changing to app directory in npmInstall()")
-	}
-
-	cmd := exec.Command("npm", "install")
-	fmt.Printf("Installing NodeJS modules...\n")
-
-	if err = cmd.Run(); err != nil {
-		return err
-	}
-
-	if err = localFS.Chdir(".."); err != nil {
-		return errors.New("error changing back to project root directory in npmInstall()")
+		return fmt.Errorf("error running 'make setup': %w", err)
 	}
 
 	return nil
-}
-
-func buildNode(localFS filesystem.FileSystem) error {
-	var (
-		err error
-	)
-
-	if err = localFS.Chdir("app"); err != nil {
-		return errors.New("error changing to app directory in buildNode()")
-	}
-
-	cmd := exec.Command("npm", "run", "build")
-	fmt.Printf("Building NodeJS app...\n")
-
-	if err = cmd.Run(); err != nil {
-		return err
-	}
-
-	if err = localFS.Chdir(".."); err != nil {
-		return errors.New("error changing back to project root directory in buildNode()")
-	}
-
-	return nil
-}
-
-func gitInit() error {
-	var (
-		err error
-	)
-
-	fmt.Printf("Initialize Git repository... \n")
-	cmd := exec.Command("git", "init")
-
-	err = cmd.Run()
-	return err
 }
 
 func exitOnInterrupt(err error) {
