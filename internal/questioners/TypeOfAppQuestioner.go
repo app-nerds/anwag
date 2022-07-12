@@ -1,29 +1,29 @@
 package questioners
 
 import (
-  "fmt"
+	"fmt"
 
-  "github.com/app-nerds/anwag/internal/answercontext"
-  "github.com/app-nerds/anwag/internal/typesofapps"
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/AlecAivazis/survey/v2/terminal"
+	"github.com/app-nerds/anwag/internal/answercontext"
+	"github.com/app-nerds/anwag/internal/typesofapps"
 )
 
 func AskTypeOfAppQuestions(context *answercontext.Context) error {
-  fmt.Printf("TYPE OF APP QUESTIONS\n")
-  fmt.Printf("---------------------\n")
+	fmt.Printf("TYPE OF APP QUESTIONS\n")
+	fmt.Printf("---------------------\n")
 
 	questions := []*survey.Question{
 		{
 			Name: "WhatTypeOfApp",
 			Prompt: &survey.Select{
 				Message: "What type of application are you making?",
-        Options: []string{
-          typesofapps.EmptyApp,
-          typesofapps.ApiApp,
-          typesofapps.VueApp,
-          typesofapps.CronApp,
-        },
+				Options: []string{
+					typesofapps.EmptyApp,
+					typesofapps.ApiApp,
+					typesofapps.JSApp,
+					typesofapps.CronApp,
+				},
 			},
 		},
 		{
@@ -40,7 +40,6 @@ func AskTypeOfAppQuestions(context *answercontext.Context) error {
 		return err
 	}
 
-  fmt.Printf("\n\n")
-  return nil
+	fmt.Printf("\n\n")
+	return nil
 }
-

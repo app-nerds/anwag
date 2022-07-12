@@ -1,0 +1,10 @@
+import Home from "./static/views/Home.js";
+
+import { application } from "./static/js/libraries/nerdwebjs/nerdwebjs.js";
+
+const routes = [
+  { path: "/", view: Home },
+];
+
+const app = application("#app", routes);
+app.go();

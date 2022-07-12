@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>{{.Title}}</title>
+  <link rel="stylesheet" href="/static/js/libraries/nerdwebjs/nerdwebjs.css"/>
+</head>
+
+<body>
+  <header>
+    <span class="title">{{.Title}}</span>
+    <nav>
+      <ul>
+        <li><a href="/">Home</a></li>
+      </ul>
+    </nav>
+  </header>
+
+  <div id="successBox" class="message-box success-box"></div>
+  <div id="errorBox" class="message-box error-box"></div>
+
+  <div id="app"></div>
+
+  <script type="module" src="/main.js"></script>
+</body>
+
+</html>

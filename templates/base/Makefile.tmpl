@@ -14,11 +14,10 @@ GC=${GOENV} go build -ldflags="${BUILDFLAGS}" -mod=mod -o ${PROJECTNAME}
 # Local dev tasks
 #
 
-setup: ## Perform initial setup of dependencies. Requires Go 1.18{{- if .WantFrontend}} and NodeJS{{end}}
-	{{- if .WantFrontend}}
-	cd app && npm install && npm run build{{end}}
+setup: ## Perform initial setup of dependencies. Requires Go 1.18
 	cd cmd/{{.AppName}} && go mod download
 	cd cmd/{{.AppName}} && go get
+	cd cmd/{{.AppName}} && go run github.com/99designs/gqlgen generate
 
 bench: ## Run all benchmark tests
 	go test ./... -bench=.
@@ -36,29 +35,23 @@ run: ## Run the application for local development
 # Build tasks
 #
 
-build-windows:{{- if.WantFrontend}} build-client-app{{end}} ## Create a compiled Windows binary
+build-windows: ## Create a compiled Windows binary
 	cd cmd/{{.AppName}} && GOOS=windows GOARCH=amd64 ${GC}-windows-${VERSION}.exe
 
-build-mac:{{- if.WantFrontend}} build-client-app{{end}} ## Create a compiled MacOS binary (arm64)
+build-mac: ## Create a compiled MacOS binary (arm64)
 	cd cmd/{{.AppName}} && GOOS=darwin GOARCH=arm64 ${GC}-darwin-arm64-${VERSION}
 
-build-mac-amd:{{- if.WantFrontend}} build-client-app{{end}} ## Create a compiled MacOS binary (amd64)
+build-mac-amd: ## Create a compiled MacOS binary (amd64)
 	cd cmd/{{.AppName}} && GOOS=darwin GOARCH=amd64 ${GC}-darwin-${VERSION}
 
-build-linux:{{- if.WantFrontend}} build-client-app{{end}} ## Create a compiled Linux binary (amd64)
+build-linux: ## Create a compiled Linux binary (amd64)
 	cd cmd/{{.AppName}} && GOOS=linux GOARCH=amd64 ${GC}-linux-${VERSION}
 
-build-all:{{- if.WantFrontend}} build-client-app{{end}} ## Build all architectures
+build-all: ## Build all architectures
 	cd cmd/{{.AppName}} && GOOS=windows GOARCH=amd64 ${GC}-windows-${VERSION}.exe
 	cd cmd/{{.AppName}} && GOOS=darwin GOARCH=arm64 ${GC}-darwin-arm64-${VERSION}
 	cd cmd/{{.AppName}} && GOOS=darwin GOARCH=amd64 ${GC}-darwin-${VERSION}
 	cd cmd/{{.AppName}} && GOOS=linux GOARCH=amd64 ${GC}-linux-${VERSION}
-
-{{- if .WantFrontend}}
-
-build-client-app: 
-	cd app && npm run build
-{{end}}
 
 package: ## Package executables into a ZIP file
 	cd cmd/{{.AppName}} && zip  ./{{.AppName}}-linux-amd64-${VERSION}.zip ./*linux*

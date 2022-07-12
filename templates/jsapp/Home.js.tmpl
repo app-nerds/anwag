@@ -1,0 +1,21 @@
+import { BaseView } from "../js/libraries/nerdwebjs/nerdwebjs.js";
+
+export default class Home extends BaseView {
+  constructor(params) {
+    super(params);
+  }
+  
+  async render() {
+    this.innerHTML = `
+      <title>Home</title>
+
+      <h1>Hello world!</h1>
+    `;
+  }
+
+  async afterRender() {
+    // Do any initialization, event binding, etc... here
+  }
+}
+
+customElements.define("home-page", Home);

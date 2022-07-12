@@ -6,6 +6,7 @@ package main
 
 import (
   "context"
+  "embed"
   "net/http"
   "time"
 
@@ -34,6 +35,18 @@ var (
 
 	config *configuration.Config
 	logger *logrus.Entry
+
+  //go:embed app
+  appFs embed.FS
+
+  //go:embed app/index.html
+  indexHTML []byte
+
+  //go:embed app/main.js
+  mainJS []byte
+
+  //go:embed app/manifest.json
+  manifestJSON []byte
 )
 
 func main() {
@@ -65,7 +78,7 @@ func main() {
   {{- end}}
 
 	logger.WithField("host", config.ServerHost).Info("starting server...")
-  restConfig := nerdweb.DefaultRESTConfig(config.ServerHost)
+  spaConfig := nerdweb.DefaultSPAConfig(config.ServerHost, Version, appFs, indexHTML, mainJS, manifestJSON)
 
 	graphQLServer := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: &graph.Resolver{
 {{- if .WantDatabase}}
@@ -74,12 +87,12 @@ func main() {
 		Config: config,
 	}}))
 
-  restConfig.Endpoints = nerdweb.Endpoints{
+  spaConfig.Endpoints = nerdweb.Endpoints{
     {Path: "/version", Methods: []string{http.MethodGet}, HandlerFunc: handlers.VersionHandler(config, logger)},
 		{Path: "/query", Methods: []string{http.MethodPost}, Handler: graphQLServer},
   }
 
-  _, server := nerdweb.NewRESTRouterAndServer(restConfig)
+  _, server := nerdweb.NewSPARouterAndServer(spaConfig)
 
   /*
    * Start the server
