@@ -1,22 +1,16 @@
 # App Nerds Web Application Generator
 
-The **App Nerds Web Application Generator**, or *anwag*, is a tool to generate and scaffold a web application written in Go and and VueJS. The stack looks a little something like the following.
+The **App Nerds Web Application Generator**, or *anwag*, is a tool to generate and scaffold a web application written in Go and and NerdwebJS. The stack looks a little something like the following.
 
-* Go 1.16 for building your API
-* VueJS 2 for building reactive Javascript applications
-* Bootstrap 4 for a great CSS foundation
-* FontAwesome 5 for an icon library
-* moment.js for date handling
-* vue-loading-overlay to provide a spinner library. Already wired up for HTTP requests!
-* vue-resource 1.5 for easy HTTP AJAX stuff
-* vue-router 3 for Single Page Application routing
-* vue-session for persisting data to local storage
-* vuex 3 for state management
+* Go 1.18 for building your API
+  * Build RESTful endpoints using [Nerdweb](https://github.com/app-nerds/nerdweb)
+  * Build GraphQL APIs using [gqlgen](https://gqlgen.com)
+* [NerdwebJS](https://github.com/app-nerds/nerdwebjs) for building basic, vanilla-JS SPA web applications
 
 ## Installation
 
 ```
-go get -u github.com/app-nerds/anwag
+go install github.com/app-nerds/anwag@latest
 ```
 
 ## Usage

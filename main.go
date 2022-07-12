@@ -47,9 +47,7 @@ func main() {
 	fmt.Printf("\n🙏 Welcome to App Nerds Web Application Generator (%s)\n\n", Version)
 	fmt.Printf("Please note that you'll need the following tools to develop in this application:\n")
 	fmt.Printf("   Go - https://golang.org\n")
-	fmt.Printf("   Swag - https://github.com/swaggo/swag\n")
-	fmt.Printf("   NodeJS - https://nodejs.org\n")
-	fmt.Printf("   Vue CLI - https://cli.vuejs.org\n")
+	fmt.Printf("   make - Comes with most Linux and MacOS distros")
 	fmt.Printf("   Docker - https://www.docker.com\n")
 	fmt.Printf("\n")
 
