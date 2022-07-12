@@ -17,7 +17,9 @@ GC=${GOENV} go build -ldflags="${BUILDFLAGS}" -mod=mod -o ${PROJECTNAME}
 setup: ## Perform initial setup of dependencies. Requires Go 1.18
 	cd cmd/{{.AppName}} && go mod download
 	cd cmd/{{.AppName}} && go get
+{{- if or (eq .WhatTypeOfApp "API application (REST + GraphQL)") (eq .WhatTypeOfApp "JavaScript web application (nerdwebjs + REST + GraphQL)")}}
 	cd cmd/{{.AppName}} && go run github.com/99designs/gqlgen generate
+{{- end}}
 
 bench: ## Run all benchmark tests
 	go test ./... -bench=.
