@@ -2,6 +2,14 @@
 
 All notable changes will be docmented here.
 
+## 2.0.0
+
+* Complete rewrite of the application. Now with less questions!
+* Took out some stuff I don't use
+* Will generate a vanilla JS application instead of VueJS
+* Now with GraphQL support!
+* Can now generate CRON applications
+
 ## 1.4.1
 
 * Fixed typo in generated Dockerfile

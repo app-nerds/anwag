@@ -5,7 +5,6 @@ go 1.18
 require (
 	github.com/AlecAivazis/survey/v2 v2.3.5
 	github.com/app-nerds/kit/v6 v6.2.1
-	github.com/iancoleman/strcase v0.1.3
 )
 
 require (
