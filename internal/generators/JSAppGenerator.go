@@ -44,6 +44,7 @@ func JSAppGenerator(context *answercontext.Context, localFS filesystem.FileSyste
 		{TemplateName: "nerdwebjs.js.map.tmpl", OutputName: filepath.Join("cmd", context.AppName, "app", "static", "js", "libraries", "nerdwebjs", "nerdwebjs.js.map")},
 		{TemplateName: "nerdwebjs.css.tmpl", OutputName: filepath.Join("cmd", context.AppName, "app", "static", "js", "libraries", "nerdwebjs", "nerdwebjs.css")},
 		{TemplateName: "Home.js.tmpl", OutputName: filepath.Join("cmd", context.AppName, "app", "static", "views", "Home.js")},
+		{TemplateName: "About.js.tmpl", OutputName: filepath.Join("cmd", context.AppName, "app", "static", "views", "About.js")},
 	}
 
 	dir.MakeDirs(localFS, dirs)
