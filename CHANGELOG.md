@@ -2,6 +2,11 @@
 
 All notable changes will be docmented here.
 
+## 2.0.2
+
+* Added custom scalar in GraphQL configuration for MongoDB ObjectID
+* Added go generate action in main.go for API Application and JS Application
+
 ## 2.0.1
 
 * Fixed readme issue

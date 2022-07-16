@@ -1,3 +1,8 @@
+//go:generate go run github.com/99designs/gqlgen generate
+{{- if and .WantDatabase (eq .WhatTypeOfDatabase "MongoDB")}}
+//go:generate go run internal/hooks/bson.go
+{{- end}}
+
 /*
  * Copyright © {{.Year}}. App Nerds LLC All Rights Reserved
  */

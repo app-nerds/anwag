@@ -1,0 +1,26 @@
+package scalars
+
+import (
+	"fmt"
+	"io"
+
+	"github.com/99designs/gqlgen/graphql"
+	"github.com/globalsign/mgo/bson"
+)
+
+func MarshalObjectIdScalar(o bson.ObjectId) graphql.Marshaler {
+	return graphql.WriterFunc(func(w io.Writer) {
+		w.Write([]byte(fmt.Sprintf(`"%s"`, o.Hex())))
+	})
+}
+
+func UnmarshalObjectIdScalar(v interface{}) (bson.ObjectId, error) {
+	switch v := v.(type) {
+	case string:
+		return bson.ObjectId(v), nil
+
+	default:
+		return bson.ObjectId(""), fmt.Errorf("%T is not a bson.ObjectId", v)
+	}
+}
+

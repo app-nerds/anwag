@@ -47,6 +47,11 @@ func JSAppGenerator(context *answercontext.Context, localFS filesystem.FileSyste
 		{TemplateName: "About.js.tmpl", OutputName: filepath.Join("cmd", context.AppName, "app", "static", "views", "About.js")},
 	}
 
+	if context.WantDatabase && context.WhatTypeOfDatabase == "MongoDB" {
+		mapping = append(mapping, mappings.MappingType{TemplateName: "bson.go.tmpl", OutputName: filepath.Join("cmd", context.AppName, "internal", "hooks", "bson.go")})
+		mapping = append(mapping, mappings.MappingType{TemplateName: "ObjectID.go.tmpl", OutputName: filepath.Join("cmd", context.AppName, "internal", "scalars", "ObjectID.go")})
+	}
+
 	dir.MakeDirs(localFS, dirs)
 	templates.Execute(localFS, templateFS, "templates/jsapp/*.tmpl", mapping, context)
 }
