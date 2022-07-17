@@ -2,6 +2,10 @@
 
 All notable changes will be docmented here.
 
+## 2.0.3
+
+* Fixed broken unmarshalling of bson.ObjectIDs in GraphQL
+
 ## 2.0.2
 
 * Added custom scalar in GraphQL configuration for MongoDB ObjectID

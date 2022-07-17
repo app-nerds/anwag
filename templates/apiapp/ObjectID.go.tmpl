@@ -17,7 +17,7 @@ func MarshalObjectIdScalar(o bson.ObjectId) graphql.Marshaler {
 func UnmarshalObjectIdScalar(v interface{}) (bson.ObjectId, error) {
 	switch v := v.(type) {
 	case string:
-		return bson.ObjectId(v), nil
+    return bson.ObjectIdHex(v), nil
 
 	default:
 		return bson.ObjectId(""), fmt.Errorf("%T is not a bson.ObjectId", v)
